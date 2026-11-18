@@ -32,7 +32,8 @@ Deixe o jogo em **Janela** ou **Tela cheia sem borda**; em tela cheia exclusiva 
 - Não mexe no jogo: só lê a tela e os arquivos de registro do Hytale.
 - A tradução funciona sem internet. Com a opção "Buscar traduções novas na internet" ligada, ele baixa a lista de traduções mais nova deste repositório e avisa quando sai uma versão nova. Nada do seu computador é enviado.
 - As traduções vêm de uma biblioteca com mais de 2.700 textos revisados à mão ([`app/data/biblioteca.json`](app/data/biblioteca.json)). O que não está nela é traduzido automaticamente e aparece em *itálico*.
-- Termos de jogo ficam em inglês, como a gente fala: Hotbar, loot, boss, buff, HP, XP, tier, rank, pet.
+- Termos de jogo ficam em inglês, como a gente fala: Hotbar, loot, boss, buff, HP, XP, tier, rank, pet. Nomes de skills, itens, montarias, masmorras e jogadores também ficam em inglês.
+- Para receber traduções corrigidas e versões novas, clique em **Verificar atualizações** na janela do tradutor.
 
 ## Ajudar com as traduções
 

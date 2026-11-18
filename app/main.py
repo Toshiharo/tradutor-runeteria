@@ -172,14 +172,9 @@ class App:
                                       cfg["atualizar_pela_internet"], self.set_online)
         tk.Frame(box, bg=T.CARD, height=8).pack()
 
-        bar = tk.Frame(panel, bg=T.PANEL)
-        bar.pack(fill="x", padx=16, pady=(12, 0))
-        for i, (text, cmd) in enumerate((("Telas novas", self.run_updater_async),
-                                         ("Traduções", lambda: os.startfile(USER_DIR)),
-                                         ("Recarregar", self.reload_user))):
-            T.RButton(bar, text, cmd, kind="secondary", height=34, small=True).grid(
-                row=0, column=i, sticky="we", padx=(0 if i == 0 else 6, 0))
-            bar.columnconfigure(i, weight=1, uniform="b")
+        # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
+        self.btn_check = T.RButton(panel, "Verificar atualizações", self.check_updates, kind="secondary", height=38)
+        self.btn_check.pack(fill="x", padx=16, pady=(12, 0))
 
         self.lbl_info = tk.Label(panel, text="", font=T.font("body"), fg=T.TEXT, bg=T.PANEL, anchor="w",
                                  justify="left", wraplength=W - 34)
@@ -298,6 +293,39 @@ class App:
             self.ocr_error = str(e)
             self.ui_q.put(("info", "Não foi possível instalar o leitor de tela."))
         self.ui_q.put(("status",))
+
+    def check_updates(self):
+        """Botao "Verificar atualizacoes": traducoes novas do repositorio + versao nova do programa.
+        Tambem recarrega as correcoes do usuario e procura telas novas no cache do jogo."""
+        self.btn_check.set(text="Verificando...", enabled=False)
+        self.lbl_info.config(text="")
+        threading.Thread(target=self._check_updates, daemon=True).start()
+
+    def _check_updates(self):
+        msg = ""
+        try:
+            import online
+            self.lib.reload_user_files()
+            got = online.sync_translations() if config.FROZEN else False
+            if got:
+                self.lib.reload_seed()
+            if self.mt is not None:
+                self.mt.glossary, self.mt.terms = self.lib.glossary, self.lib.terms
+            v = online.newer_version()
+            if v:
+                self.ui_q.put(("update", v))
+                msg = f"Saiu a versão {v} do programa. Clique em Baixar para instalar."
+            elif online.reachable():
+                msg = "Traduções atualizadas." if got else "Você já tem as traduções mais recentes."
+            else:
+                msg = "Sem conexão com a internet. Tente de novo mais tarde."
+            self.run_updater(quiet=True)
+        except Exception:
+            log_error()
+            msg = "Não foi possível verificar agora. Tente de novo mais tarde."
+        self.ui_q.put(("libstats",))
+        self.ui_q.put(("info", msg))
+        self.ui_q.put(("checked",))
 
     # ---------- internet (opcional) ----------
     def online_check(self):
@@ -505,6 +533,8 @@ class App:
                     self.refresh_status()
                 elif kind == "status":
                     self.refresh_status()
+                elif kind == "checked":
+                    self.btn_check.set(text="Verificar atualizações", enabled=True)
                 elif kind == "update":
                     self.lbl_update.config(text=f"Versão {msg[1]} disponível")
                     self.update_box.pack(fill="x", padx=16, pady=(10, 0), before=self.footer)

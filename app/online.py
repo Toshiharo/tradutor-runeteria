@@ -69,6 +69,15 @@ def sync_translations():
     return changed
 
 
+def reachable():
+    """Consegue falar com o GitHub agora?"""
+    try:
+        _get(f"https://api.github.com/repos/{REPO}", timeout=8)
+        return True
+    except Exception:
+        return False
+
+
 def _parse(version):
     out = []
     for part in version.strip().lstrip("vV").split("."):

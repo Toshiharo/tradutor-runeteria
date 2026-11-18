@@ -2,6 +2,7 @@
 
 Prioridade: minhas_traducoes.json (voce) > biblioteca.json (revisada) > memoria_automatica.json
 """
+import difflib
 import re
 import threading
 import time
@@ -32,6 +33,62 @@ def is_upper(text):
     return len(letters) >= 2 and sum(c.isupper() for c in letters) / len(letters) > 0.85
 
 
+MEMORY_VERSION = 2  # memoria automatica gravada antes disto traduzia nomes proprios: e descartada
+
+
+def _tok(t):
+    return NUM_RE.sub("#", EDGE_RE.sub("", t.translate(OCR_FIX))).lower()
+
+
+def _variable_like(span):
+    """Pedaco com cara de valor de exemplo (nome de jogador/loja/item), nao de palavra comum.
+
+    "Toshi's Forge & Armory", "Ver0420", "_Toshi", "Rene's Cottage" sim; "ITEM", "Max" nao: palavra comum
+    que a traducao copia igual (ITEM, LOOT, PET) nao e variavel, e troca-la poria lixo na tela.
+    """
+    words = span.split()
+    if re.search(r"[\d_'&]", span):
+        return True
+    return len(words) >= 2 and not span.isupper() and all(w[:1].isupper() for w in words)
+
+
+def adapt(screen, en, pt, strict):
+    """Ajusta a traducao de `en` (texto da biblioteca) para `screen` (o que esta na tela), ou None.
+
+    So aceita diferencas que nao mudam o sentido:
+    - erro do OCR numa palavra ("Currentbonus", "chancc") -> a traducao continua valendo;
+    - parte variavel que a traducao copia igual (nome de jogador, de loja, de item): troca pelo da tela
+      ("Branch #1 of Toshi's Forge" -> "... of Bob's Shop" muda tambem na traducao);
+    - com `strict` (texto muito parecido), uma palavrinha a mais ou a menos.
+    Qualquer outra diferenca -> None. Assim nunca aparece na tela um nome ou valor que nao e o do jogo.
+    """
+    from rapidfuzz import fuzz
+    a, b = screen.split(), en.split()
+    na, nb = [_tok(x) for x in a], [_tok(x) for x in b]
+    out, changed = pt, 0
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, nb, na, autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        changed += max(i2 - i1, j2 - j1)
+        if strict and op == "replace" and i2 - i1 == j2 - j1 and all(
+                fuzz.ratio(x, y) >= 80 for x, y in zip(nb[i1:i2], na[j1:j2])):
+            continue  # erro de leitura do OCR (so em texto quase identico: "Requires" nao e "REQUEST")
+        core = EDGE_RE.sub("", " ".join(b[i1:i2]))
+        new = EDGE_RE.sub("", " ".join(a[j1:j2]))
+        if op == "replace" and _variable_like(core) and new and not NUM_RE.fullmatch(core):
+            pos = out.lower().find(core.lower())
+            if pos >= 0:  # a traducao copia esse pedaco igual: e variavel, troca pelo da tela
+                out = out[:pos] + new + out[pos + len(core):]
+                continue
+        if strict and op in ("insert", "delete") and max(i2 - i1, j2 - j1) == 1 and \
+                len(" ".join(b[i1:i2] or a[j1:j2])) <= 3:
+            continue
+        return None
+    if changed > max(1, len(b) // 2):
+        return None  # diferente demais para ser o mesmo texto
+    return out
+
+
 def refill_numbers(src_ocr, pt):
     """Coloca os numeros que apareceram na tela dentro da traducao."""
     nums = NUM_RE.findall(src_ocr)
@@ -47,6 +104,12 @@ class Library:
         self.lock = threading.RLock()
         self.seed = self._load_seed()
         self.memory = read_json(MEMORY_FILE, {})
+        old = [k for k, v in self.memory.items()
+               if v.get("source") == "auto-tela" and v.get("v", 1) < MEMORY_VERSION]
+        for k in old:  # gravadas pela versao que ainda traduzia nomes de skill/item/jogador
+            del self.memory[k]
+        if old:
+            write_json(MEMORY_FILE, self.memory)
         self.overrides = read_json(USER_OVERRIDES, None)
         if self.overrides is None:
             self.overrides = {"_leia": "Escreva aqui \"texto em ingles\": \"sua traducao\". Isto vence todas as outras traducoes."}
@@ -126,27 +189,33 @@ class Library:
     def knows(self, en):
         return normalize(en) in self.index
 
-    def _find(self, key, min_score):
-        """(entrada, score) pela chave normalizada: exato primeiro, depois parecido (erros do OCR)."""
+    def _candidates(self, key):
+        """[(entrada, score)] parecidas com a chave, da mais parecida para a menos (guardado: a mesma
+        tela e consultada varias vezes por segundo)."""
+        if key in self._fuzzy_cache:
+            return self._fuzzy_cache[key]
+        found = []
+        if len(key) >= 5:
+            res = process.extract(key, self.keys_long, scorer=fuzz.ratio, limit=5, score_cutoff=70)
+            # quantidade de numeros diferente = outro texto (e os numeros da tela nao encaixariam)
+            found = [(self.index[k], sc) for k, sc, _ in res if k.count("#") == key.count("#")]
+        if len(self._fuzzy_cache) > 5000:
+            self._fuzzy_cache.clear()
+        self._fuzzy_cache[key] = found
+        return found
+
+    def _find(self, text, key, min_score):
+        """((en, pt, origem), score) para o texto da tela: exato, ou parecido com adapt() aprovando."""
         hit = self.index.get(key)
         if hit is not None:
             return hit, 100
-        if len(key) < 5:
-            return None
-        ck = (key, min_score)
-        if ck in self._fuzzy_cache:  # a mesma tela e consultada a cada ~0,8 s
-            return self._fuzzy_cache[ck]
         # texto curto: uma letra a mais/menos muda o sentido (Skill/Skills), entao exige mais
-        cutoff = max(min_score, 92) if len(key) < 8 else min_score
-        found = None
-        res = process.extractOne(key, self.keys_long, scorer=fuzz.ratio, score_cutoff=cutoff)
-        # quantidade de numeros diferente = outro texto (e os numeros da tela nao encaixariam)
-        if res and res[0].count("#") == key.count("#"):
-            found = (self.index[res[0]], res[1])
-        if len(self._fuzzy_cache) > 5000:
-            self._fuzzy_cache.clear()
-        self._fuzzy_cache[ck] = found
-        return found
+        strict_at = max(min_score, 92) if len(key) < 8 else min_score
+        for (en, pt, origin), score in self._candidates(key):
+            new = adapt(text, en, pt, score >= strict_at)
+            if new is not None:
+                return (en, new, origin), score
+        return None
 
     def lookup(self, text, min_score=86):
         """Devolve (traducao, origem, score) ou None."""
@@ -154,7 +223,7 @@ class Library:
         if len(key) < 2 or not re.search(r"[a-z]{2}", key):
             return None
         with self.lock:
-            found = self._find(key, min_score)
+            found = self._find(text, key, min_score)
         if found is None:
             return None
         (en, pt, origin), score = found
@@ -176,7 +245,7 @@ class Library:
             if normalize(en) in self.index:
                 return
             self.memory[en] = {"pt": pt, "source": source, "reviewed": False,
-                               "data": time.strftime("%Y-%m-%d")}
+                               "data": time.strftime("%Y-%m-%d"), "v": MEMORY_VERSION}
             k = normalize(en)
             self.index[k] = (en, pt, "auto")
             self.keys.append(k)

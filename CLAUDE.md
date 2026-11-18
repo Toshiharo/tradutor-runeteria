@@ -45,6 +45,15 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
   `main.draw` alinha pela linha de base, desenha letra a letra quando há espaçamento (`draw_tracked`), nunca quebra
   no meio de palavra e não redesenha se nada mudou. Tradução automática aparece em itálico.
   `usar_cores_da_tela: false` volta às cores fixas; `fonte_overlay` troca "auto" por uma fonte fixa.
+- `variaveis.py` + `pipeline.Translator` — partes variáveis e telas nunca vistas. Ordem em `Translator._one`:
+  biblioteca (exato, ou parecido aprovado por `library.adapt`) → `compose` (linha de tooltip/atributo montada por
+  partes: nome no começo + termos da biblioteca/`termos_fixos` + valores intactos) → nome próprio (`is_name`) ou
+  ruído (`is_noise`, nome de jogador no chat) ficam em inglês sem caixa → tradução automática em lote, com nomes e
+  valores protegidos (`names_in`). "Nome" = 2–5 palavras com inicial maiúscula sem palavra de frase, ou palavra que o
+  modelo quebra em 3+ pedaços (`unknown_word`). `adapt` só troca pedaço com cara de valor (`_variable_like`:
+  número, apóstrofo, nome de 2+ palavras) e só aceita erro de OCR em texto quase idêntico: nunca põe na tela nome
+  ou valor que não é o do jogo. Memória automática tem `"v": 2`; entradas `auto-tela` antigas são descartadas.
+  Testes: `.venv\Scripts\python.exe -m unittest discover -s tests` (casos reais de tooltip/skill/item).
 - `pipeline.tidy_lines` (antes de traduzir) separa colunas que o OCR juntou e tira ícones lidos como letra
   ("O MANA"); `join_known` junta pedaços de rótulos espaçados quando o conjunto existe na biblioteca ("RUNE BACKPACK").
 - `library.py` — prioridade: `minhas_traducoes.json` (usuário) > `data/biblioteca.json` (~2.770 revisadas; a cópia baixada do GitHub só vale no programa instalado e se for mais nova)
@@ -80,6 +89,9 @@ Fontes em `app/fonts` (OFL, carregadas só para o processo): Cormorant (título)
 Sem emoji. Marca: logos oficiais do Runeteria em `app/assets` (logo completo no cabeçalho, "R" dourado no ícone);
 `tools/gerar_icone.py <pasta dos logos>` regenera `icone.ico` e as imagens. Não usar cores fora dos tokens.
 `main._build_window` monta a janela; `refresh_status` decide a frase de estado e as linhas de "Preparação".
+Só um botão de ação além de Ligar/Desligar: "Verificar atualizações" (`main.check_updates`: recarrega correções do
+usuário, baixa biblioteca/glossário do GitHub, avisa de versão nova, procura telas novas no cache). Não adicionar
+botões técnicos (pasta, recarregar, telas novas): o usuário é leigo.
 
 ## Internet (opcional, desligável)
 `online.py` só lê do GitHub (`Toshiharo/tradutor-runeteria`): `app/data/biblioteca.json` e `glossario.json` do branch

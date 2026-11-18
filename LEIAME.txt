@@ -10,6 +10,8 @@ COMO USAR
 A janela do tradutor mostra o que está acontecendo e o que falta. Se alguma linha
 de "Preparação" estiver vermelha ou amarela, clique no botão ao lado dela.
 
+Para receber traduções corrigidas e versões novas, clique em "Verificar atualizações".
+
 Se a tradução não aparecer
 - Deixe o jogo em JANELA ou TELA CHEIA SEM BORDA (em tela cheia exclusiva ela não aparece).
 - O tradutor só funciona dentro do Runeteria. Em outro servidor ou no menu ele fica parado.
@@ -35,16 +37,21 @@ DE ONDE VÊM AS TRADUÇÕES
 3. Texto que não está na biblioteca é traduzido automaticamente uma vez e guardado.
    Ele aparece em ITÁLICO, para você saber que foi tradução automática.
 Termos de jogo ficam em inglês, como a gente fala: Hotbar, loot, boss, buff, HP, XP,
-tier, rank, pet.
+tier, rank, pet. Nomes de skills, itens, montarias, masmorras e jogadores também
+ficam em inglês. Em tooltips, os números e valores ficam exatamente como no jogo.
 
-CORRIGIR UMA TRADUÇÃO
+ACHOU UMA TRADUÇÃO ERRADA?
+Avise a equipe do Runeteria: a correção chega para todo mundo pelo botão
+"Verificar atualizações".
+
+Para corrigir só no seu computador (avançado):
 1. Com a tela aberta no jogo, aperte F10.
-2. No tradutor, clique em "Traduções" e abra ultima_tela.txt.
+2. Abra a pasta %APPDATA%\RuneteriaTradutor e o arquivo ultima_tela.txt.
 3. Copie a linha em inglês para minhas_traducoes.json assim:
    {
      "Choose a Torment tier and enter": "Escolha o nível de Tormento e entre"
    }
-4. Clique em "Recarregar".
+4. Clique em "Verificar atualizações" (ele também recarrega suas correções).
 
 Para um nome nunca ser traduzido, adicione em glossario.json, em "manter_em_ingles".
 Para a tradução automática escrever um termo sempre do mesmo jeito, adicione em
@@ -54,7 +61,7 @@ DESINSTALAR
 Configurações do Windows > Aplicativos > Tradutor Runeteria > Desinstalar.
 Suas correções ficam em %APPDATA%\RuneteriaTradutor (apague a pasta se quiser).
 
-Se algo der errado, mande o arquivo erros.log da pasta "Traduções".
+Se algo der errado, mande o arquivo erros.log da pasta %APPDATA%\RuneteriaTradutor.
 
 Feito por Toshi, da equipe de UI/UX do Runeteria, com autorização do dono do servidor.
 Não é um produto oficial do Hytale.

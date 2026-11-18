@@ -162,6 +162,22 @@
   "health": "vida",
   "max health": "vida máxima",
   "critical hit": "acerto crítico",
-  "leaderboard": "ranking"
+  "leaderboard": "ranking",
+  "bow": "arco",
+  "bows": "arcos",
+  "dagger": "adaga",
+  "daggers": "adagas",
+  "sword": "espada",
+  "swords": "espadas",
+  "damage": "dano",
+  "weapon damage": "dano de arma",
+  "ability": "habilidade",
+  "abilities": "habilidades",
+  "key binding": "atalho",
+  "mount": "montaria",
+  "current bonus": "bônus atual",
+  "signature": "signature",
+  "skill": "habilidade",
+  "skills": "habilidades"
  }
 }

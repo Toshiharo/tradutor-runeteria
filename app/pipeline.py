@@ -6,13 +6,17 @@ import time
 
 from library import normalize
 from style import block_align, guess_align
+from variaveis import FUNC as FUNC_WORDS
+from variaveis import SEP_RE, find_names, is_name_phrase, is_noise, is_value_token, only_values
 
 LETTERS_RE = re.compile(r"[A-Za-z]{2,}")
 WORD_RE = re.compile(r"[A-Za-z][A-Za-z'\-]*")
 PT_RE = re.compile(r"[ãõçáéíóúâêô]")
 VOWELS = set("aeiouy")
 
-STABLE_SECONDS = 1.5   # o texto precisa ficar parado na tela esse tempo antes de ir para a traducao automatica
+STABLE_SECONDS = 0.5   # o texto precisa ficar parado na tela esse tempo antes de ir para a traducao automatica
+                       # (curto: tooltip aparece e some; o lixo do cenario ja e barrado pelos filtros)
+BATCH = 16             # quantos textos a traducao automatica faz de uma vez
 FORGET_SECONDS = 6.0   # sumiu da tela por esse tempo: a contagem recomeca
 MAX_QUEUE = 30         # fila cheia = tela com muito texto novo; o resto espera a proxima passada
 MAX_FAILED = 4000
@@ -190,6 +194,8 @@ class Translator:
         self.failed = set()    # chaves que o modelo nao soube traduzir (nao tenta de novo nesta sessao)
         self.seen = {}         # chave -> [primeira vez, ultima vez] que apareceu na tela
         self._last_prune = 0.0
+        self._composed = {}    # texto -> traducao montada por partes (ou None)
+        self._unknown = {}     # palavra -> o modelo de traducao nao conhece (nome inventado)
         if self._mt_ok():
             threading.Thread(target=self._worker, daemon=True).start()
 
@@ -198,23 +204,144 @@ class Translator:
 
     def _worker(self):
         while True:
-            key, text = self.q.get()
-            ok = False
+            items = [self.q.get()]
+            while len(items) < BATCH:  # junta o que mais chegou: tela nova = varios textos de uma vez
+                try:
+                    items.append(self.q.get_nowait())
+                except queue.Empty:
+                    break
+            texts = [t for _, t in items]
             try:
-                pt = self.mt.translate(text)
-                # saida igual a entrada (nome proprio) ou absurdamente longa (modelo "viajou") nao serve
-                if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
-                        and not mostly_untranslated(text, pt, self._known_words())):
-                    self.lib.add_auto(text, pt, "auto-tela")
-                    ok = True
+                outs = self.mt.translate_many(texts, [self.names_in(t) for t in texts])
             except Exception:
-                pass
-            with self._lock:
-                if not ok:
-                    if len(self.failed) >= MAX_FAILED:
-                        self.failed.clear()
-                    self.failed.add(key)
-                self.pending.discard(key)
+                outs = [None] * len(items)
+            known = self._known_words()
+            for (key, text), pt in zip(items, outs):
+                ok = False
+                try:
+                    keep = {w.lower() for n in self.names_in(text) for w in n.split()}
+                    # saida igual a entrada (nome proprio) ou absurdamente longa (modelo "viajou") nao serve
+                    if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
+                            and not mostly_untranslated(text, pt, known | keep)):
+                        self.lib.add_auto(text, pt, "auto-tela")
+                        ok = True
+                except Exception:
+                    pass
+                with self._lock:
+                    if not ok:
+                        if len(self.failed) >= MAX_FAILED:
+                            self.failed.clear()
+                        self.failed.add(key)
+                    self.pending.discard(key)
+
+    # ---------- nomes e partes variaveis ----------
+    def unknown_word(self, word):
+        """O modelo nao conhece a palavra (quebra em 3+ pedacos): e nome inventado (Boomshroom, Velcorne)."""
+        w = word.strip("'\"").lower()
+        if len(w) < 5 or not self._mt_ok():
+            return False
+        r = self._unknown.get(w)
+        if r is None:
+            if len(self._unknown) > 20000:
+                self._unknown.clear()
+            r = self._unknown[w] = self.mt.pieces(w) >= 3 and not self.lib.knows(w)
+        return r
+
+    def _fixed_terms(self):
+        """Termos de jogo que tem traducao (slot -> espaco): quem tem um deles e rotulo, nao nome."""
+        return [en for en, pt in getattr(self.lib, "terms", {}).items() if pt.lower() != en.lower()]
+
+    def is_name(self, text):
+        return is_name_phrase(text, self._fixed_terms(), self.unknown_word)
+
+    def names_in(self, text):
+        """Nomes e valores da frase que a traducao automatica nao pode mexer ("7.7s" virava "7, 7 s")."""
+        keep = find_names(text, self._fixed_terms(), self.unknown_word)
+        for tok in text.split():
+            t = tok.strip(",;()[]")
+            if t and is_value_token(t) and re.search(r"\d", t) and re.search(r"[A-Za-z.,:/]", t) and t not in keep:
+                keep.append(t)
+        return keep
+
+    def compose(self, text):
+        """Monta a traducao de linhas de tooltip/atributos por partes, sem traducao automatica.
+
+        "Armor 15 Vitality +7" -> "Armadura 15 Vitalidade +7"
+        "Bleeding Slice 143 damage • 7.7s • 32..." -> nome fica, "damage" vem da biblioteca, valores ficam.
+        Devolve (traducao, origem) ou None se alguma parte nao tiver traducao conhecida.
+        """
+        if text in self._composed:
+            return self._composed[text]
+        if len(self._composed) > 5000:
+            self._composed.clear()
+        r = self._compose(text)
+        self._composed[text] = r
+        return r
+
+    def _lookup_piece(self, phrase):
+        hit = self.lib.lookup(phrase, 92)
+        if not hit:
+            term = getattr(self.lib, "terms", {}).get(phrase.lower())  # "weapon damage" -> "dano de arma"
+            if not term:
+                return None
+            hit = (term.upper() if phrase.isupper() else (term[:1].upper() + term[1:] if phrase[:1].isupper() else term),
+                   "manual")
+        pt, origin = hit[0], hit[1]
+        if phrase.islower():
+            pt = pt.lower()
+        return pt, origin
+
+    def _compose(self, text):
+        parts = SEP_RE.split(text)
+        out, origins = [], set()
+        for k, seg in enumerate(parts):
+            if k % 2 or not seg.strip() or only_values(seg):
+                out.append(seg)  # separador ou so valores
+                continue
+            core = seg.strip()
+            if len(parts) > 1:
+                hit = self._lookup_piece(core)
+                if hit:
+                    out.append(seg.replace(core, hit[0]))
+                    origins.add(hit[1])
+                    continue
+            if self.is_name(core):
+                out.append(seg)
+                continue
+            # pedaco com valores no meio ("Armor 15 Vitality +7"): termo a termo, mas so em linha
+            # de atributo (tem numero e nao tem palavra de frase), nunca em frase comum
+            toks = core.split()
+            if not any(is_value_token(t) for t in toks) or any(t.lower() in FUNC_WORDS for t in toks):
+                return None
+            res, i = [], 0
+            while i < len(toks):
+                if is_value_token(toks[i]):
+                    res.append(toks[i])
+                    i += 1
+                    continue
+                j = i
+                while j < len(toks) and not is_value_token(toks[j]):
+                    j += 1
+                run = toks[i:j]
+                done = False
+                for end in range(len(run), 0, -1):  # maior pedaco conhecido primeiro
+                    phrase = " ".join(run[:end])
+                    hit = self._lookup_piece(phrase)
+                    # no comeco da linha de atributo vem o nome da skill/item ("Hemorrhage 145 damage")
+                    lead = i == 0 and all(w[:1].isupper() for w in run[:end]) and not phrase.isupper()
+                    if hit or self.is_name(phrase) or (lead and end == len(run)):
+                        res.append(hit[0] if hit else phrase)
+                        if hit:
+                            origins.add(hit[1])
+                        i += end
+                        done = True
+                        break
+                if not done:
+                    return None
+            out.append(seg.replace(core, " ".join(res)))
+        if not origins:
+            return None  # nada traduzido: deixa o original
+        return "".join(out), ("auto" if "auto" in origins else "manual")
 
     def _known_words(self):
         """Palavras que e normal sairem iguais na traducao: nomes do glossario e termos mantidos em ingles."""
@@ -260,8 +387,14 @@ class Translator:
         hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86))
         if hit:
             return hit[0], hit[1]
-        if allow_mt:
-            self._maybe_queue(text)
+        if not allow_mt:
+            return None
+        r = self.compose(text)  # linha de tooltip/atributo: monta por partes
+        if r:
+            return r
+        if self.is_name(text) or is_noise(text, self.unknown_word):
+            return None  # nome proprio ou nome de jogador: fica em ingles, sem caixa por cima
+        self._maybe_queue(text)
         return None
 
     def boxes(self, lines):

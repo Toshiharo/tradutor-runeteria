@@ -141,16 +141,20 @@ class OfflineTranslator:
         if self._rules_key != key:
             items = [(t, None) for t in self.glossary] + list(self.terms.items())
             items.sort(key=lambda it: len(it[0]), reverse=True)
-            self._rules_cache = [(re.compile(r"(?<![\w])" + re.escape(t) + r"(?![\w])", re.I), r) for t, r in items]
+            # (?<![\w/]): "/mount" e comando do chat, nao o termo "mount"
+            self._rules_cache = [(re.compile(r"(?<![\w/])" + re.escape(t) + r"(?![\w])", re.I), r) for t, r in items]
             self._rules_key = key
         return self._rules_cache
 
-    def _protect(self, text):
+    def _protect(self, text, keep=()):
         """Troca por marcadores os nomes que ficam em ingles e os termos de jogo com traducao fixa
-        (hotbar -> Hotbar, quest -> missao), para o modelo nao inventar ('barra quente')."""
+        (hotbar -> Hotbar, quest -> missao), para o modelo nao inventar ("barra quente").
+        keep: nomes achados nesta frase (skill, item, jogador) que tambem ficam como estao."""
         found, fixed = [], []
         out = text
-        for pat, repl in self._rules():
+        extra = [(re.compile(r"(?<![\w])" + re.escape(k) + r"(?![\w])", re.I), None)
+                 for k in sorted(set(k for k in keep if k), key=len, reverse=True)]
+        for pat, repl in extra + self._rules():
             def rep(m, repl=repl):
                 found.append(m.group(0) if repl is None else _keep_case(m.group(0), repl))
                 fixed.append(repl is not None)
@@ -175,42 +179,65 @@ class OfflineTranslator:
         toks = [self.sp.encode(t, out_type=str) for t in texts]
         with self._lock:
             res = self.translator.translate_batch(toks, beam_size=3, max_decoding_length=256,
-                                                  replace_unknowns=True)
+                                                  replace_unknowns=True, max_batch_size=16)
         # junta as pecas na mao (como o Argos faz): o sp.decode deixa "▁" sobrando em pecas que ele nao conhece
-        return [SPACE_RE.sub(" ", "".join(r.hypotheses[0]).replace("▁", " ")).strip() for r in res]
+        return [SPACE_RE.sub(" ", "".join(r.hypotheses[0]).replace("\u2581", " ")).strip() for r in res]
 
-    def translate(self, text):
-        if not self.ok:
-            return None
-        text = text.strip()
-        if not text:
-            return text
-        original = text
-        if text.isupper() and len(text) > 3:
-            # o modelo erra muito com TUDO EM MAIUSCULAS ("SETTINGS" -> "CONSTITUICOES"):
-            # traduz em caixa normal e devolve em maiusculas no fim
-            text = text.capitalize()
-        prot, found, fixed = self._protect(text)
-        if found and not re.search(r"[A-Za-z]{2}", PH_RE.sub("", prot)):
-            out = self._restore(prot, found)[0]  # so termos conhecidos: nao precisa do modelo
-        else:
-            out = _agree(self._raw([prot])[0], found, fixed)
-            out, complete = self._restore(out, found)
-            if not complete:
-                # o modelo "comeu" um termo protegido: traduz os pedacos entre os termos
-                pieces = []
-                for i, p in enumerate(PH_RE.split(prot)):  # [texto, indice, texto, indice, ...]
-                    if i % 2:
-                        pieces.append(found[int(p)])
-                    elif re.search(r"[A-Za-z]{2}", p):
-                        pieces.append(self._raw([p.strip()])[0])
-                    else:
-                        pieces.append(p)
-                out = " ".join(s.strip() for s in pieces if s.strip())
-            out = to_ptbr(out)
+    def pieces(self, word):
+        """Em quantos pedacos o modelo quebra a palavra: palavra inglesa comum = 1 ou 2; nome inventado = 3+."""
+        return len(self.sp.encode(word.lower(), out_type=str)) if self.ok else 0
+
+    @staticmethod
+    def _finish(original, out):
         # o modelo gosta de por ponto final em rotulo curto ("Look" -> "Olha.")
         if out.endswith(".") and not out.endswith("..") and original[-1] not in ".!?:;":
             out = out[:-1]
         if original.isupper():
             out = out.upper()
+        return out
+
+    def translate(self, text, keep=()):
+        return self.translate_many([text], [keep])[0]
+
+    def translate_many(self, texts, keeps=None):
+        """Traduz varios textos de uma vez (uma tela nova inteira sai bem mais rapido que um por um)."""
+        if not self.ok:
+            return [None] * len(texts)
+        keeps = keeps or [()] * len(texts)
+        out, jobs = [None] * len(texts), []
+        for i, (text, keep) in enumerate(zip(texts, keeps)):
+            text = text.strip()
+            if not text:
+                out[i] = text
+                continue
+            original = text
+            if text.isupper() and len(text) > 3:
+                # o modelo erra muito com TUDO EM MAIUSCULAS ("SETTINGS" -> "CONSTITUICOES"):
+                # traduz em caixa normal e devolve em maiusculas no fim
+                text = text.capitalize()
+            prot, found, fixed = self._protect(text, keep)
+            if len(found) == 2 and all(fixed) and re.fullmatch(r"\s*Zq0x\s+Zq1x\s*", prot):
+                # "Ability Slots" -> "Espacos de habilidade" (em ingles o principal vem por ultimo)
+                head, mod = found[1], found[0]
+                res = head[:1].upper() + head[1:] if mod[:1].isupper() else head
+                out[i] = self._finish(original, res + " de " + (mod if mod.isupper() and len(mod) <= 3 else mod.lower()))
+            elif found and not re.search(r"[A-Za-z]{2}", PH_RE.sub("", prot)):
+                out[i] = self._finish(original, self._restore(prot, found)[0])  # so termos conhecidos
+            else:
+                jobs.append((i, original, prot, found, fixed))
+        if jobs:
+            for (i, original, prot, found, fixed), raw in zip(jobs, self._raw([j[2] for j in jobs])):
+                res, complete = self._restore(_agree(raw, found, fixed), found)
+                if not complete:
+                    # o modelo "comeu" um termo protegido: traduz os pedacos entre os termos
+                    pieces = []
+                    for k, p in enumerate(PH_RE.split(prot)):  # [texto, indice, texto, indice, ...]
+                        if k % 2:
+                            pieces.append(found[int(p)])
+                        elif re.search(r"[A-Za-z]{2}", p):
+                            pieces.append(self._raw([p.strip()])[0])
+                        else:
+                            pieces.append(p)
+                    res = " ".join(x.strip() for x in pieces if x.strip())
+                out[i] = self._finish(original, to_ptbr(res))
         return out
