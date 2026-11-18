@@ -13560,7 +13560,7 @@
 "reviewed": true
 },
 "Open for trade": {
-"pt": "Aberta para comércio",
+"pt": "Aberta para negócios",
 "source": "manual",
 "reviewed": true
 },
@@ -13830,7 +13830,7 @@
 "reviewed": true
 },
 "Crafted by": {
-"pt": "Craftado por",
+"pt": "Feito por",
 "source": "manual",
 "reviewed": true
 },
@@ -14061,6 +14061,256 @@
 },
 "Husbandry Level": {
 "pt": "Nível de Pecuária",
+"source": "manual",
+"reviewed": true
+},
+"PLAYING SOLO": {
+"pt": "JOGANDO SOLO",
+"source": "manual",
+"reviewed": true
+},
+"Invite someone to an open seat, or post on the party board - your party is made for you.": {
+"pt": "Convide alguém para uma vaga livre ou publique no quadro de grupos - o grupo é montado para você.",
+"source": "manual",
+"reviewed": true
+},
+"Click to open.": {
+"pt": "Clique para abrir.",
+"source": "manual",
+"reviewed": true
+},
+"Rentable Shop - Administration": {
+"pt": "Loja para alugar - Administração",
+"source": "manual",
+"reviewed": true
+},
+"Rented by": {
+"pt": "Alugada por",
+"source": "manual",
+"reviewed": true
+},
+"HOURS": {
+"pt": "HORAS",
+"source": "manual",
+"reviewed": true
+},
+"PRICE - COINS (in copper)": {
+"pt": "PREÇO - MOEDAS (em cobre)",
+"source": "manual",
+"reviewed": true
+},
+"SAVE CONFIG": {
+"pt": "SALVAR CONFIGURAÇÃO",
+"source": "manual",
+"reviewed": true
+},
+"Teleporting in 3 seconds - don't move.": {
+"pt": "Teletransportando em 3 segundos - não se mexa.",
+"source": "manual",
+"reviewed": true
+},
+"Teleporting in 3 seconds - don't": {
+"pt": "Teletransportando em 3 segundos - não",
+"source": "manual",
+"reviewed": true
+},
+"move.": {
+"pt": "se mexa.",
+"source": "manual",
+"reviewed": true
+},
+"Teleport cancelled - you moved.": {
+"pt": "Teletransporte cancelado - você se mexeu.",
+"source": "manual",
+"reviewed": true
+},
+"Preparing your trip to the guild hall...": {
+"pt": "Preparando sua viagem para o salão da guilda...",
+"source": "manual",
+"reviewed": true
+},
+"has joined": {
+"pt": "entrou",
+"source": "manual",
+"reviewed": true
+},
+"is now online": {
+"pt": "está online",
+"source": "manual",
+"reviewed": true
+},
+"Your members, invitations and join requests.": {
+"pt": "Seus membros, convites e pedidos para entrar.",
+"source": "manual",
+"reviewed": true
+},
+"Only officers can see requests.": {
+"pt": "Só oficiais podem ver os pedidos.",
+"source": "manual",
+"reviewed": true
+},
+"12 OF 12 MEMBERS": {
+"pt": "12 DE 12 MEMBROS",
+"source": "manual",
+"reviewed": true
+},
+"A skirmisher in leather who strikes fast and from afar, available weapons are: Bows and Daggers. Recommended scaling with AGILITY.": {
+"pt": "Um combatente de couro que ataca rápido e de longe. Armas disponíveis: arcos e adagas. Escala recomendada: AGILIDADE.",
+"source": "manual",
+"reviewed": true
+},
+"Max level": {
+"pt": "Nível máximo",
+"source": "manual",
+"reviewed": true
+},
+"Bow": {
+"pt": "Arco",
+"source": "manual",
+"reviewed": true
+},
+"Dagger": {
+"pt": "Adaga",
+"source": "manual",
+"reviewed": true
+},
+"Vitality (Survivability)": {
+"pt": "Vitalidade (sobrevivência)",
+"source": "manual",
+"reviewed": true
+},
+"Agility (Scaling)": {
+"pt": "Agilidade (escala)",
+"source": "manual",
+"reviewed": true
+},
+"SIGNATURE ABILITY": {
+"pt": "HABILIDADE SIGNATURE",
+"source": "manual",
+"reviewed": true
+},
+"Become a whirling storm of daggers, rapidly striking all nearby enemies as you move.": {
+"pt": "Vire uma tempestade de adagas, golpeando rápido todos os inimigos por perto enquanto se move.",
+"source": "manual",
+"reviewed": true
+},
+"Become a whirling storm of daggers, rapidly": {
+"pt": "Vire uma tempestade de adagas, golpeando rápido",
+"source": "manual",
+"reviewed": true
+},
+"striking all nearby enemies as you move.": {
+"pt": "todos os inimigos por perto enquanto se move.",
+"source": "manual",
+"reviewed": true
+},
+"Unlocks at": {
+"pt": "Desbloqueia no",
+"source": "manual",
+"reviewed": true
+},
+"Key binding": {
+"pt": "Atalho",
+"source": "manual",
+"reviewed": true
+},
+"SET DEFAULT": {
+"pt": "PADRÃO",
+"source": "manual",
+"reviewed": true
+},
+"EVICT + DISMANTLE": {
+"pt": "DESPEJAR + DESMONTAR",
+"source": "manual",
+"reviewed": true
+},
+"NO KEY": {
+"pt": "SEM TECLA",
+"source": "manual",
+"reviewed": true
+},
+"No party": {
+"pt": "Sem grupo",
+"source": "manual",
+"reviewed": true
+},
+"FORM A PARTY": {
+"pt": "FORMAR GRUPO",
+"source": "manual",
+"reviewed": true
+},
+"Guild Quest": {
+"pt": "Missão da guilda",
+"source": "manual",
+"reviewed": true
+},
+"You can only skip the night after dark": {
+"pt": "Você só pode pular a noite depois que escurecer",
+"source": "manual",
+"reviewed": true
+},
+"Too early to sleep": {
+"pt": "Cedo demais para dormir",
+"source": "manual",
+"reviewed": true
+},
+"Visit": {
+"pt": "Visitar",
+"source": "manual",
+"reviewed": true
+},
+"event, rewards were delivered, scene will reset shortly": {
+"pt": "evento, recompensas entregues, a cena reinicia em breve",
+"source": "manual",
+"reviewed": true
+},
+"Equipped mount": {
+"pt": "Montaria equipada",
+"source": "manual",
+"reviewed": true
+},
+"The Z wheel and /mount summon it. Click to choose another mount.": {
+"pt": "A roda do Z e o /mount chamam a montaria. Clique para escolher outra.",
+"source": "manual",
+"reviewed": true
+},
+"HIDE COMBAT STATS": {
+"pt": "ESCONDER ATRIBUTOS DE COMBATE",
+"source": "manual",
+"reviewed": true
+},
+"Your rewards have been delivered.": {
+"pt": "Suas recompensas foram entregues.",
+"source": "manual",
+"reviewed": true
+},
+"started a conversation with you. Use /r or /whisper to reply.": {
+"pt": "começou uma conversa com você. Use /r ou /whisper para responder.",
+"source": "manual",
+"reviewed": true
+},
+"Level 8 - in 5 levels": {
+"pt": "Nível 8 - em 5 níveis",
+"source": "manual",
+"reviewed": true
+},
+"Level 2 - in 1 level": {
+"pt": "Nível 2 - em 1 nível",
+"source": "manual",
+"reviewed": true
+},
+"You need to be looking at water to cast.": {
+"pt": "Você precisa estar olhando para a água para lançar a linha.",
+"source": "manual",
+"reviewed": true
+},
+"Hello!": {
+"pt": "Olá!",
+"source": "manual",
+"reviewed": true
+},
+"Announcement:": {
+"pt": "Anúncio:",
 "source": "manual",
 "reviewed": true
 }

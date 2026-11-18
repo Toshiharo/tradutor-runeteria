@@ -196,10 +196,19 @@ class OfflineTranslator:
         return [SPACE_RE.sub(" ", "".join(r.hypotheses[0]).replace("\u2581", " ")).strip() for r in res]
 
     def _backend(self, prots, flags=None):
-        """Traducao dos textos protegidos: online se der, offline se o servidor nao responder."""
-        if self.online is not None and self.online.available():
+        """Traducao dos textos protegidos: online se der, offline se o servidor nao responder.
+        flags: True = texto de tela, False = chat (nao guarda), "offline" = so a traducao offline."""
+        flags = flags or [True] * len(prots)
+        if self.online is not None and self.online.available() and any(f != "offline" for f in flags):
+            res = [None] * len(prots)
+            on = [i for i, f in enumerate(flags) if f != "offline"]
+            off = [i for i, f in enumerate(flags) if f == "offline"]
             try:
-                res = self.online.raw(prots, flags)
+                for i, r in zip(on, self.online.raw([prots[i] for i in on], [flags[i] for i in on])):
+                    res[i] = r
+                if off and self.ok:
+                    for i, r in zip(off, self._raw([prots[i] for i in off])):
+                        res[i] = r
                 miss = [i for i, r in enumerate(res) if r is None]
                 if miss and self.ok:
                     for i, r in zip(miss, self._raw([prots[i] for i in miss])):

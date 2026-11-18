@@ -15,7 +15,7 @@ from config import APP_VERSION
 TIMEOUT = 4.0
 RETRY_AFTER = 60.0
 _MARK = re.compile(r"Zq\s?(\d+)\s?x", re.I)
-_TAG = re.compile(r"<k>\s*(Zq\s?\d+\s?x)\s*</k>", re.I)
+_TAG = re.compile(r"<k>\s*Z(\d+)\s*</k>")
 _NUM_TAG = re.compile(r"<k>\s*N(\d+)\s*</k>")
 _NUM = re.compile(r"\d+(?:[.,]\d+)*")
 
@@ -38,7 +38,7 @@ class OnlineMT:
         parts = []
         for k, piece in enumerate(re.split(r"(Zq\s?\d+\s?x)", text, flags=re.I)):
             if k % 2:
-                parts.append("<k>Zq%sx</k>" % re.sub(r"\D", "", piece))
+                parts.append("<k>Z%s</k>" % re.sub(r"\D", "", piece))  # curto: cada caractere conta
                 continue
 
             def num(m):
@@ -53,7 +53,7 @@ class OnlineMT:
         def num(m):
             i = int(m.group(1))
             return nums[i] if i < len(nums) else m.group(0)
-        return html.unescape(_NUM_TAG.sub(num, _TAG.sub(lambda m: m.group(1), text)))
+        return html.unescape(_NUM_TAG.sub(num, _TAG.sub(lambda m: "Zq%sx" % m.group(1), text)))
 
     def raw(self, texts, keep_flags=None):
         """Traduz textos ja protegidos. Devolve uma lista (None onde falhou) ou levanta erro se o

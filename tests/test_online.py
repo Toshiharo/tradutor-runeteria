@@ -63,19 +63,57 @@ class Chat(unittest.TestCase):
         self.assertFalse(LIB.knows("anyone want to do the dungeon"))
 
 
+class Economia(unittest.TestCase):
+    def test_nome_mais_frase_conhecida_nao_vai_para_a_traducao(self):
+        mt = OfflineTranslator(config.MODEL_DIR, LIB.glossary, LIB.terms)  # sabe que Kwaxu nao e palavra inglesa
+        if not mt.ok:
+            self.skipTest('modelo offline nao encontrado')
+        tr = Translator(LIB, mt, dict(config.DEFAULTS))
+        self.assertEqual(tr._one("Kwaxu has joined")[0], "Kwaxu entrou")
+        self.assertEqual(tr._one("MarbleMouse743 has joined")[0], "MarbleMouse743 entrou")
+        r = tr._one("[From Jm_Az (NA Hub)] started a conversation with you. Use /r or /whisper to reply.")
+        self.assertEqual(r[0], "[From Jm_Az (NA Hub)] começou uma conversa com você. Use /r ou /whisper para responder.")
+        self.assertIsNone(tr._one("Iron has joined", allow_mt=False))  # "Iron" nao tem cara de nome
+
+    def test_girias_sao_traduzidas_sem_fila(self):
+        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        self.assertEqual(tr._one("G (NA-DRV) Bob_99: ty gg")[0], "G (NA-DRV) Bob_99: valeu gg")
+        self.assertEqual(tr._one("G (NA-DRV) Bob_99: lol")[0], "G (NA-DRV) Bob_99: kkkk")
+        self.assertIsNone(tr._one("G (NA-DRV) Bob_99: rip", allow_mt=True))  # "rip" fica "rip": nada a desenhar
+
+    def test_chat_curto_vai_so_para_a_offline(self):
+        class FakeOnline:
+            sent = []
+
+            def available(self):
+                return True
+
+            def raw(self, texts, flags=None):
+                FakeOnline.sent.append(list(texts))
+                return ["[online]" for _ in texts]
+
+        mt = OfflineTranslator(config.MODEL_DIR, LIB.glossary, LIB.terms)
+        mt.online = FakeOnline()
+        mt._raw = lambda texts: ["[offline]" for _ in texts]
+        out = mt.translate_many(["got ore", "the server is full of people from an old regime"], None,
+                                ["offline", False])
+        self.assertEqual(out, ["[offline]", "[online]"])
+        self.assertEqual(FakeOnline.sent, [["the server is full of people from an old regime"]])
+
+
 class Online(unittest.TestCase):
     def test_marcador_vai_protegido_e_volta(self):
         w, nums = OnlineMT._wrap("Open your Zq0x & check <stats>")
-        self.assertEqual(w, "Open your <k>Zq0x</k> &amp; check &lt;stats&gt;")
-        self.assertEqual(OnlineMT._unwrap("Abra sua <k>Zq0x</k> &amp; veja &lt;stats&gt;", nums),
+        self.assertEqual(w, "Open your <k>Z0</k> &amp; check &lt;stats&gt;")
+        self.assertEqual(OnlineMT._unwrap("Abra sua <k>Z0</k> &amp; veja &lt;stats&gt;", nums),
                          "Abra sua Zq0x & veja <stats>")
 
     def test_numeros_viram_marcador_e_voltam(self):
         a, na = OnlineMT._wrap("Reach level 10 with Zq0x in 2.5s")
         b, nb = OnlineMT._wrap("Reach level 11 with Zq0x in 3.5s")
         self.assertEqual(a, b)  # mesmo texto para a memoria compartilhada: paga uma vez so
-        self.assertEqual(a, "Reach level <k>N0</k> with <k>Zq0x</k> in <k>N1</k>s")
-        self.assertEqual(OnlineMT._unwrap("Chegue ao nível <k>N0</k> com <k>Zq0x</k> em <k>N1</k>s", nb),
+        self.assertEqual(a, "Reach level <k>N0</k> with <k>Z0</k> in <k>N1</k>s")
+        self.assertEqual(OnlineMT._unwrap("Chegue ao nível <k>N0</k> com <k>Z0</k> em <k>N1</k>s", nb),
                          "Chegue ao nível 11 com Zq0x em 3.5s")
 
     def test_usa_o_servidor_e_mantem_termos_e_concordancia(self):

@@ -16,6 +16,8 @@ PT_RE = re.compile(r"[ãõçáéíóúâêô]")
 VOWELS = set("aeiouy")
 
 STABLE_SECONDS = 0.5   # o texto precisa ficar parado na tela esse tempo antes de ir para a traducao automatica
+STABLE_ONLINE = 1.0    # com a traducao online: espera mais (tooltip que pisca na tela nao gasta a cota)
+SHORT_CHAT = 3         # mensagem de chat com ate essas palavras vai para a traducao offline (gratis)
                        # (curto: tooltip aparece e some; o lixo do cenario ja e barrado pelos filtros)
 BATCH = 16             # quantos textos a traducao automatica faz de uma vez
 FORGET_SECONDS = 6.0   # sumiu da tela por esse tempo: a contagem recomeca
@@ -244,7 +246,7 @@ def chat_split(text):
     da mensagem, mensagem), ou None. So a mensagem e traduzida: canal e nome ficam com os pixels do jogo."""
     toks = text.split()
     for k, t in enumerate(toks[:6]):
-        if len(t) > 1 and t.endswith(":") and k + 2 < len(toks) + 1 and len(toks) - (k + 1) >= 2:
+        if len(t) > 1 and t.endswith(":") and len(toks) - (k + 1) >= 1:
             name, prefix = t[:-1], toks[:k]
             nameish = bool(re.search(r"[\d_]", name)) or (name[:1].isupper() and not name.isupper() and
                                                            any(c.isupper() for c in name[1:]))
@@ -308,7 +310,7 @@ class Translator:
                     if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
                             and same_numbers and not re.search(r"\bI[O0]\b|\bO[I1]\b", pt)
                             and not mostly_untranslated(text, pt, known | keep)):
-                        if keep_it:
+                        if keep_it is True:
                             self.lib.add_auto(text, pt, "auto-tela")
                         else:
                             if len(self.chat) > 400:
@@ -489,14 +491,16 @@ class Translator:
                 self.seen[key] = [now, now]
                 return
             rec[1] = now
-            if now - rec[0] < STABLE_SECONDS or self.q.qsize() >= MAX_QUEUE:
+            online = getattr(self.mt, "online", None) is not None
+            if now - rec[0] < (STABLE_ONLINE if online else STABLE_SECONDS) or self.q.qsize() >= MAX_QUEUE:
                 return
             del self.seen[key]
             self.pending.add(key)
         self.q.put((key, text, True))
 
     def _queue_chat(self, text):
-        """Mensagem de chat vai para a fila na hora (sem esperar duas leituras: o chat anda rapido)."""
+        """Mensagem de chat vai para a fila na hora (sem esperar duas leituras: o chat anda rapido).
+        Mensagem curta vai so para a traducao offline: nao vale gastar a cota online com "rip mine"."""
         if not self.cfg.get("traduzir_desconhecidos", True) or not self._mt_ok():
             return
         key = normalize(text)
@@ -504,7 +508,18 @@ class Translator:
             if not key or key in self.pending or key in self.failed or key in self.chat:
                 return
             self.pending.add(key)
-        self.q.put((key, text, False))
+        self.q.put((key, text, "offline" if len(text.split()) <= SHORT_CHAT else False))
+
+    def _slang(self, msg):
+        """Mensagem feita so de girias ("ty", "lol gg", "brb") -> traducao pronta, sem fila."""
+        words = re.findall(r"[a-z']+", msg.lower())
+        slang = getattr(self.lib, "slang", {})
+        if not words or len(words) > 4 or not all(w in slang for w in words):
+            return None
+        if re.sub(r"[a-z'\s!?.,:)(3<>^_-]", "", msg.lower()):
+            return None  # tem numero ou outra coisa no meio
+        out = " ".join(p for p in (slang[w] for w in words) if p)
+        return out if out and out.lower() != " ".join(words) else None
 
     def _prune(self):
         now = time.monotonic()
@@ -514,6 +529,28 @@ class Translator:
         with self._lock:
             for k in [k for k, rec in self.seen.items() if now - rec[1] > FORGET_SECONDS]:
                 del self.seen[k]
+
+    def _name_then_phrase(self, text):
+        """Nome de jogador + frase da biblioteca: "Kwaxu has joined", "[From Jm_Az (NA Hub)] started a
+        conversation with you...". Traduz so a frase; o nome fica com os pixels do jogo. Sem isso, cada
+        nome novo era uma frase nova para a traducao automatica (e gastava a cota online)."""
+        toks = text.split()
+        for k in range(1, min(5, len(toks) - 1) + 1):
+            rest = " ".join(toks[k:])
+            if len(toks) - k < 2 and not rest.endswith((".", "!")):
+                continue
+            if not self.lib.knows_reviewed(rest):
+                continue
+            head = toks[:k]
+            nameish = any(re.search(r"[\d_\[\]()]", t) or (t[:1].isalpha() and any(c.isupper() for c in t[1:]))
+                          or (self.unknown_word(t.strip(".,:")) if t[:1].isalpha() else False) for t in head)
+            if not nameish:
+                continue
+            hit = self.lib.lookup(rest, 100)
+            if not hit or hit[0] == rest:
+                return None
+            return " ".join(head + [hit[0]]), hit[1], [(k, len(toks), hit[0], hit[1])]
+        return None
 
     def _garbled_name(self, text):
         """Nome do glossario lido com erro pelo OCR, sozinho ou com "(coming soon)": "EVE' RR@OT FOREST",
@@ -539,15 +576,20 @@ class Translator:
         chat = chat_split(text) if allow_mt else None
         if chat:
             k, msg = chat
-            if looks_portuguese(msg) or not looks_translatable(msg):
+            pt, origin = self._slang(msg), "manual"  # "ty", "lol gg": pronto, sem fila e sem cota
+            if not pt and (looks_portuguese(msg) or not looks_translatable(msg)):
                 return None
-            hit = self.lib.lookup(msg, 92)
-            pt, origin = (hit[0], hit[1]) if hit else (self.chat.get(normalize(msg)), "auto")
+            if not pt:
+                hit = self.lib.lookup(msg, 92)
+                pt, origin = (hit[0], hit[1]) if hit else (self.chat.get(normalize(msg)), "auto")
             if not pt:
                 self._queue_chat(msg)
                 return None
             toks = text.split()
             return " ".join(toks[:k] + [pt]), origin, [(k, len(toks), pt, origin)]
+        named = self._name_then_phrase(text)
+        if named:
+            return named
         exact = self.lib.knows_reviewed(text)  # a memoria automatica nao passa na frente do "por partes"
         hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86)) if exact else None
         if hit:

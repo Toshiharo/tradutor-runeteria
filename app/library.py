@@ -148,7 +148,8 @@ class Library:
             seed = {"manter_em_ingles": list(seed.get("manter_em_ingles", [])) + online["manter_em_ingles"],
                     "termos_fixos": {**(seed.get("termos_fixos") or {}), **(online.get("termos_fixos") or {})},
                     "verbos_de_objetivo": {**(seed.get("verbos_de_objetivo") or {}),
-                                           **(online.get("verbos_de_objetivo") or {})}}
+                                           **(online.get("verbos_de_objetivo") or {})},
+                    "chat_girias": {**(seed.get("chat_girias") or {}), **(online.get("chat_girias") or {})}}
         g = seed.get("manter_em_ingles", [])
         user = read_json(USER_GLOSSARY, None)
         if user is None:
@@ -164,6 +165,12 @@ class Library:
                 if isinstance(pt, str) and en.strip() and pt.strip():
                     terms[en.strip().lower()] = pt.strip()
         self.terms = terms
+        # girias do chat ("ty", "lol", "brb"): traducao gratis de mensagem curta
+        self.slang = {}
+        for src in (seed, user):
+            for en, pt in (src.get("chat_girias") or {}).items():
+                if isinstance(pt, str) and en.strip():
+                    self.slang[en.strip().lower()] = pt.strip()
         # verbos de objetivo de missao ("Mine 15 Rock Blocks"); os do usuario vencem os do programa
         self.verbs = {}
         for src in (seed, user):

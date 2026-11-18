@@ -8,7 +8,11 @@
 //   Cloudflare (sem limite de gravacao): a mesma mensagem vista por varios jogadores e paga uma vez so.
 // - Numeros chegam como <k>N0</k>: "Level 10" e "Level 11" sao o mesmo texto para a memoria.
 // - GET /memoria (com o segredo ADMIN_TOKEN): baixa a memoria para revisar e passar para a biblioteca.
-// Nao guarda nada do jogador: nem IP, nem nome, so o texto do jogo e a traducao.
+// - Limites para a cota gratis do DeepL durar o mes todo (quando estoura, devolve null e o app usa a
+//   traducao offline): por dia (LIMITE_DIA), por jogador por dia (LIMITE_IP_DIA) e, passando de 80% da
+//   cota do mes, o chat fica so na offline (o resto da cota fica para as telas).
+// Nao guarda nada do jogador: o IP so entra cifrado (com o dia) na chave de um contador que some no
+// fim do dia; nem nome nem IP sao gravados. Fica so o texto do jogo e a traducao.
 
 const MAX_TEXTS = 20;      // por pedido
 const MAX_CHARS = 600;     // por texto
@@ -16,6 +20,8 @@ const MAX_TOTAL = 6000;    // por pedido
 const VERSAO = "1";        // muda a chave da memoria (zera o cache) se o jeito de traduzir mudar
 const CACHE_CHAT = 3600;      // segundos que uma mensagem de chat fica no cache
 const CACHE_TELA = 86400 * 7; // texto de tela tambem fica no cache (poupa leitura do KV)
+const RESERVA_CHAT = 0.8;     // passou disso da cota do mes: chat so na traducao offline
+const RESERVA_TUDO = 0.97;    // perto do fim da cota: tudo na offline
 
 export default {
   async fetch(request, env) {
@@ -67,6 +73,41 @@ async function paraCache(k, pt, segundos) {
   }
 }
 
+function hoje() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function ateMeiaNoite() {
+  const d = new Date();
+  return Math.max(60, Math.ceil((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1) - d) / 1000));
+}
+
+async function contador(nome) {
+  const v = await deCache("c:" + nome);
+  return v === null ? 0 : Number(v) || 0;
+}
+
+async function somar(nome, n) {
+  await paraCache("c:" + nome, String((await contador(nome)) + n), ateMeiaNoite());
+}
+
+async function usoDoMes(env) {
+  // quanto da cota do DeepL ja foi usado (0 a 1); consultado no maximo a cada 10 min
+  const salvo = await deCache("uso");
+  if (salvo !== null) return Number(salvo);
+  try {
+    const url = (env.DEEPL_URL || "https://api-free.deepl.com/v2/translate").replace(/\/translate$/, "/usage");
+    const r = await fetch(url, { headers: { "Authorization": "DeepL-Auth-Key " + env.DEEPL_KEY } });
+    if (!r.ok) return 0;
+    const u = await r.json();
+    const frac = u.character_limit ? u.character_count / u.character_limit : 0;
+    await paraCache("uso", String(frac), 600);
+    return frac;
+  } catch {
+    return 0;
+  }
+}
+
 async function traduzir(request, env) {
   if (!(request.headers.get("User-Agent") || "").startsWith("tradutor-runeteria")) {
     return json({ erro: "cliente desconhecido" }, 403);
@@ -100,11 +141,27 @@ async function traduzir(request, env) {
     else faltam.push(i);
   }));
   faltam.sort((a, b) => a - b);
+
+  if (faltam.length) {
+    // limites: o que nao couber volta como null e o app traduz offline
+    const dia = hoje();
+    const ip = await chave(dia + "|" + (request.headers.get("CF-Connecting-IP") || "?"));
+    const limDia = Number(env.LIMITE_DIA || 20000);
+    const limIp = Number(env.LIMITE_IP_DIA || 5000);
+    const [usoDia, usoIp, mes] = await Promise.all([contador("dia:" + dia), contador("ip:" + ip), usoDoMes(env)]);
+    const soTela = mes >= RESERVA_CHAT || usoDia >= limDia;   // chat primeiro vai para a offline
+    const nada = mes >= RESERVA_TUDO || usoDia >= limDia * 1.5 || usoIp >= limIp;
+    for (let k = faltam.length - 1; k >= 0; k--) {
+      if (nada || (soTela && guardar[faltam[k]] === false)) faltam.splice(k, 1);
+    }
+  }
   // o mesmo texto duas vezes no pedido vai uma vez so para o DeepL
   const unicos = [...new Set(faltam.map((i) => textos[i]))];
 
-  if (faltam.length) {
-    const resp = await fetch(env.DEEPL_URL || "https://api-free.deepl.com/v2/translate", {
+  if (unicos.length) {
+    let resp;
+    try {
+      resp = await fetch(env.DEEPL_URL || "https://api-free.deepl.com/v2/translate", {
       method: "POST",
       headers: { "Authorization": "DeepL-Auth-Key " + env.DEEPL_KEY, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -116,10 +173,14 @@ async function traduzir(request, env) {
         preserve_formatting: true,
         context: "Interface e falas de um jogo de RPG online (Hytale). Termos de jogo como loot, boss, buff, HP e XP ficam em ingles.",
       }),
-    });
+      });
+    } catch (e) {
+      // DeepL fora do ar: devolve o que veio da memoria; o app traduz o resto offline
+      return json({ erro: "deepl indisponivel", traducoes: out });
+    }
     if (!resp.ok) {
-      // 456 = cota do mes acabou; o app volta para a traducao offline
-      return json({ erro: "deepl " + resp.status, traducoes: out }, resp.status === 456 ? 503 : 502);
+      // 456 = cota do mes acabou: devolve o que veio da memoria; o app traduz o resto offline
+      return json({ erro: "deepl " + resp.status, traducoes: out });
     }
     const dados = await resp.json();
     const porTexto = new Map(unicos.map((t, k) => [t, (dados.translations || [])[k]?.text]));
@@ -139,6 +200,10 @@ async function traduzir(request, env) {
         gravar.push(env.MEMORIA.put(chaves[i], pt, { metadata: meta }).catch(() => null));
       }
     }
+    const gastos = unicos.reduce((n, t) => n + t.length, 0);
+    const dia = hoje();
+    const ip = await chave(dia + "|" + (request.headers.get("CF-Connecting-IP") || "?"));
+    gravar.push(somar("dia:" + dia, gastos), somar("ip:" + ip, gastos));
     await Promise.all(gravar);
   }
   return json({ traducoes: out });

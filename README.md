@@ -72,7 +72,7 @@ Configurações do Windows > Aplicativos > **Tradutor Runeteria** > Desinstalar.
 
 - Não mexe no jogo: só lê a tela e os arquivos de registro do Hytale.
 - A tradução funciona sem internet. A internet é usada para baixar traduções novas deste repositório, saber se saiu versão nova e, com a **Tradução online** ligada, traduzir texto que ainda não está na biblioteca. Cada uma dessas opções pode ser desligada na janela.
-- Com a Tradução online ligada, o texto em inglês do jogo que o tradutor não conhece (inclusive mensagens do chat) é enviado ao servidor do projeto, que traduz com o DeepL. As traduções de telas ficam guardadas para os outros jogadores; mensagens de chat não são guardadas. Nada do seu computador é enviado, nem o seu nome ou IP é registrado. Com a opção desligada, nada sai do seu computador.
+- Com a Tradução online ligada, o texto em inglês do jogo que o tradutor não conhece (inclusive mensagens do chat) é enviado ao servidor do projeto, que traduz com o DeepL. As traduções de telas ficam guardadas para os outros jogadores; mensagens de chat não são guardadas. Nada do seu computador é enviado e nem o seu nome nem o seu IP são gravados (o IP só é usado, cifrado, para limitar o uso por dia). Com a opção desligada, nada sai do seu computador.
 - As traduções vêm de uma biblioteca com mais de 2.700 textos revisados à mão ([`app/data/biblioteca.json`](app/data/biblioteca.json)).
 
 ## Ajudar com as traduções

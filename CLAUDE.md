@@ -111,6 +111,16 @@ Leitor de tela: se instalou mas o processo não enxerga, reabre o app (`restart`
 Configurações > Idioma (`ocr_by_settings`). Log do Windows em `instalar_leitor.log`.
 Nome do glossário lido com erro pelo OCR ("EVE' RR@OT FOREST") fica em inglês (`Translator._garbled_name`).
 
+## Tradução online e chat
+`servidor/worker.js` (Cloudflare Worker + DeepL, ver `servidor/LEIAME.md`) traduz o que não está na biblioteca e guarda
+numa memória compartilhada (KV + Cache API). App: `online_mt.OnlineMT` (marcadores `<k>Z0</k>`, números `<k>N0</k>`
+para "Level 10"/"Level 11" serem um texto só); `mt._backend` usa o servidor e cai na offline; opção na janela só aparece
+com `config.ONLINE_MT_URL`. Flags por texto: True = tela (guarda), False = chat (só cache 1 h), "offline" = nunca vai.
+Servidor limita por dia, por IP (cifrado) e reserva a cota: >80% do mês o chat fica na offline.
+Chat (`pipeline.chat_split`): traduz só a mensagem, vai para a fila na hora; português (`looks_portuguese`) e gírias
+(`chat_girias` do glossário) não gastam nada; mensagem de até 3 palavras vai só para a offline.
+"Nome + frase da biblioteca" (`Translator._name_then_phrase`: "Kwaxu has joined") traduz só a frase.
+
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura
 nova só troca se for mais completa, se o mesmo texto couber numa caixa bem mais estreita, ou se discordar 3 leituras

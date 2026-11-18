@@ -14,3 +14,7 @@ id = "COLOQUE_AQUI_O_ID_DO_KV"
 # Chave paga do DeepL: troque a URL abaixo para https://api.deepl.com/v2/translate
 [vars]
 DEEPL_URL = "https://api-free.deepl.com/v2/translate"
+# caracteres por dia (500 mil por mes / 30 ~ 16 mil; o dia pode passar um pouco se o resto do mes sobrar)
+LIMITE_DIA = "20000"
+# caracteres por jogador por dia (protege a cota de quem tentar gastar de proposito)
+LIMITE_IP_DIA = "5000"
