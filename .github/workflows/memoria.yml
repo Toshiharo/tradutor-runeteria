@@ -1,0 +1,38 @@
+# Todo dia copia a memoria do servidor de traducao online (o que o DeepL ja traduziu para algum jogador)
+# para app/data/compartilhada.json. Os jogadores recebem pelo botao "Verificar atualizacoes" e passam a
+# usar essas traducoes sem internet e sem gastar a cota.
+# Precisa do segredo TRADUTOR_ADMIN no repositorio (Settings > Secrets and variables > Actions),
+# com o mesmo valor do ADMIN_TOKEN do servidor.
+name: Memoria compartilhada
+
+on:
+  schedule:
+    - cron: "17 6 * * *"   # 03:17 em Brasilia
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  copiar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Baixar a memoria do servidor
+        env:
+          TRADUTOR_ADMIN: ${{ secrets.TRADUTOR_ADMIN }}
+        run: python tools/baixar_memoria.py
+      - name: Gravar no repositorio
+        run: |
+          if git diff --quiet app/data/compartilhada.json; then
+            echo "nada novo"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/data/compartilhada.json
+          git commit -m "Memoria compartilhada: traducoes novas do servidor"
+          git push
