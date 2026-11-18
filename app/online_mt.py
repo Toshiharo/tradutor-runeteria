@@ -16,6 +16,8 @@ TIMEOUT = 4.0
 RETRY_AFTER = 60.0
 _MARK = re.compile(r"Zq\s?(\d+)\s?x", re.I)
 _TAG = re.compile(r"<k>\s*(Zq\s?\d+\s?x)\s*</k>", re.I)
+_NUM_TAG = re.compile(r"<k>\s*N(\d+)\s*</k>")
+_NUM = re.compile(r"\d+(?:[.,]\d+)*")
 
 
 class OnlineMT:
@@ -29,19 +31,37 @@ class OnlineMT:
 
     @staticmethod
     def _wrap(text):
-        # o servidor manda para o DeepL como XML: o marcador vai dentro de <k>, que ele nao traduz
-        return _MARK.sub(lambda m: "<k>Zq%sx</k>" % m.group(1), html.escape(text, quote=False))
+        """Texto para o servidor (XML do DeepL): marcadores e numeros vao dentro de <k>, que ele nao traduz.
+        Numeros viram N0, N1...: "Level 10" e "Level 11" sao um texto so na memoria compartilhada (paga
+        uma vez). Devolve (texto, numeros)."""
+        nums = []
+        parts = []
+        for k, piece in enumerate(re.split(r"(Zq\s?\d+\s?x)", text, flags=re.I)):
+            if k % 2:
+                parts.append("<k>Zq%sx</k>" % re.sub(r"\D", "", piece))
+                continue
+
+            def num(m):
+                nums.append(m.group(0))
+                return "\x00%d\x00" % (len(nums) - 1)
+            piece = html.escape(_NUM.sub(num, piece), quote=False)
+            parts.append(re.sub("\x00(\\d+)\x00", lambda m: "<k>N%s</k>" % m.group(1), piece))
+        return "".join(parts), nums
 
     @staticmethod
-    def _unwrap(text):
-        return html.unescape(_TAG.sub(lambda m: m.group(1), text))
+    def _unwrap(text, nums=()):
+        def num(m):
+            i = int(m.group(1))
+            return nums[i] if i < len(nums) else m.group(0)
+        return html.unescape(_NUM_TAG.sub(num, _TAG.sub(lambda m: m.group(1), text)))
 
     def raw(self, texts, keep_flags=None):
         """Traduz textos ja protegidos. Devolve uma lista (None onde falhou) ou levanta erro se o
         servidor nao respondeu (aí quem chamou usa a traducao offline)."""
         if not self.available():
             raise OSError("servidor de traducao indisponivel")
-        body = {"textos": [self._wrap(t) for t in texts]}
+        wrapped = [self._wrap(t) for t in texts]
+        body = {"textos": [w for w, _ in wrapped]}
         if keep_flags is not None:
             body["guardar"] = [bool(k) for k in keep_flags]
         req = urllib.request.Request(self.url + "/traduzir", data=json.dumps(body).encode("utf-8"), headers={
@@ -57,4 +77,11 @@ class OnlineMT:
         if not isinstance(outs, list) or len(outs) != len(texts):
             self._down_until = time.monotonic() + RETRY_AFTER
             raise OSError("resposta invalida do servidor")
-        return [self._unwrap(o) if isinstance(o, str) else None for o in outs]
+        res = []
+        for o, (_, nums) in zip(outs, wrapped):
+            if not isinstance(o, str):
+                res.append(None)
+                continue
+            back = self._unwrap(o, nums)
+            res.append(None if "<k>" in back else back)  # sobrou marcador estragado: usa a offline
+        return res

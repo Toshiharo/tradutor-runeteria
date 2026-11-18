@@ -65,9 +65,18 @@ class Chat(unittest.TestCase):
 
 class Online(unittest.TestCase):
     def test_marcador_vai_protegido_e_volta(self):
-        w = OnlineMT._wrap("Open your Zq0x & check <stats>")
+        w, nums = OnlineMT._wrap("Open your Zq0x & check <stats>")
         self.assertEqual(w, "Open your <k>Zq0x</k> &amp; check &lt;stats&gt;")
-        self.assertEqual(OnlineMT._unwrap("Abra sua <k>Zq0x</k> &amp; veja &lt;stats&gt;"), "Abra sua Zq0x & veja <stats>")
+        self.assertEqual(OnlineMT._unwrap("Abra sua <k>Zq0x</k> &amp; veja &lt;stats&gt;", nums),
+                         "Abra sua Zq0x & veja <stats>")
+
+    def test_numeros_viram_marcador_e_voltam(self):
+        a, na = OnlineMT._wrap("Reach level 10 with Zq0x in 2.5s")
+        b, nb = OnlineMT._wrap("Reach level 11 with Zq0x in 3.5s")
+        self.assertEqual(a, b)  # mesmo texto para a memoria compartilhada: paga uma vez so
+        self.assertEqual(a, "Reach level <k>N0</k> with <k>Zq0x</k> in <k>N1</k>s")
+        self.assertEqual(OnlineMT._unwrap("Chegue ao nível <k>N0</k> com <k>Zq0x</k> em <k>N1</k>s", nb),
+                         "Chegue ao nível 11 com Zq0x em 3.5s")
 
     def test_usa_o_servidor_e_mantem_termos_e_concordancia(self):
         mt = OfflineTranslator(config.MODEL_DIR, LIB.glossary, LIB.terms)
