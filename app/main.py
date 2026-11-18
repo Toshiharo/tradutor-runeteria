@@ -50,6 +50,7 @@ class App:
         self.last_lines = []
         self.last_boxes = []
         self.drawn_sig = None
+        self._faces_memo, self._faces_pruned = {}, 0.0  # fonte escolhida por texto (ver stable_face)
         self._scale, self._scale_for = 1.6, None  # escala do OCR (ver ocr_scale)
         self.mt = None
         self.ocr = None
@@ -607,6 +608,52 @@ class App:
         wn = self.font(px, False, False).measure(text)
         return abs(wb - width) <= abs(wn - width)
 
+    def _memo(self, b):
+        now = time.monotonic()
+        memo = self._faces_memo
+        if len(memo) > 3000 or now - self._faces_pruned > 30:
+            for k in [k for k, v in memo.items() if now - v["seen"] > 30]:
+                del memo[k]
+            self._faces_pruned = now
+        key = (b["en"], round(b["x"] / 8), round(b["y"] / 8))
+        rec = memo.get(key)
+        if rec is None:
+            rec = memo[key] = {"votes": {}, "faces": {}, "px": {}, "colors": {}, "seen": now}
+        rec["seen"] = now
+        return rec
+
+    def stable_colors(self, b):
+        """Mesmas cores para o mesmo texto no mesmo lugar: a cor lida varia entre leituras (e, com contraste
+        fraco, chegava a virar branco numa leitura e cinza na outra - parecia trocar de normal para negrito)."""
+        rec = self._memo(b)
+        pair = (b["bg"], b["fg"])
+        q = tuple(c[:2] + c[3:4] + c[5:6] for c in pair)  # agrupa cores quase iguais
+        votes = rec["colors"]
+        if q not in votes:
+            votes[q] = [0, pair]
+        votes[q][0] += 1
+        return max(votes.values(), key=lambda v: v[0])[1]  # empate: a primeira vista
+
+    def stable_face(self, b, face):
+        """Mesma fonte para o mesmo texto no mesmo lugar, leitura apos leitura.
+
+        Cada leitura do OCR mede as letras um pouco diferente (as escalas se alternam), e em texto curto
+        isso basta para a escolha virar entre Lexend/Inter, normal/negrito ou 11/12 px: a tela parada
+        ficava piscando. Aqui cada texto guarda as escolhas ja feitas e usa a mais votada (e o tamanho
+        mais votado): a decisao se firma em poucas leituras e nao oscila mais.
+        """
+        if face is None:
+            return None
+        rec = self._memo(b)
+        fam = (face["family"], face["weight"])
+        rec["votes"][fam] = rec["votes"].get(fam, 0) + 1
+        rec["faces"][fam] = face
+        rec["px"][face["px"]] = rec["px"].get(face["px"], 0) + 1
+        best = max(rec["votes"].items(), key=lambda kv: kv[1])[0]  # empate: fica a primeira escolha
+        chosen = dict(rec["faces"][best])
+        chosen["px"] = max(rec["px"].items(), key=lambda kv: kv[1])[0]  # tamanho mais votado; empate: o primeiro
+        return chosen
+
     def draw_tracked(self, c, ax, y, text, fnt, fill, track, align):
         """Desenha o texto letra por letra com `track` pixels a mais entre elas (o tkinter nao tem
         espacamento entre letras). Devolve (tag dos itens, caixa)."""
@@ -640,7 +687,8 @@ class App:
             auto = b["origin"] == "auto"
             if screen_colors and "bg" in b:
                 # mesmas cores do texto original; traducao automatica aparece em italico
-                bg, fg, italic = b["bg"], b["fg"], auto
+                bg, fg = self.stable_colors(b)
+                italic = auto
                 if bg.lower() == KEY_COLOR:
                     bg = "#ff00ff"
             else:
@@ -651,7 +699,7 @@ class App:
             ref_text, ref_w = b.get("ref", (b["en"], b["w"]))
             ink_y, ink_h = b.get("iy", b["y"]), b.get("ih", b["line_h"])
             # mesma fonte, peso e tamanho do original (medidos com os arquivos de fonte do jogo)
-            face = pick_face(ref_text, ref_w, ink_h, b.get("ink")) if auto_font else None
+            face = self.stable_face(b, pick_face(ref_text, ref_w, ink_h, b.get("ink"))) if auto_font else None
             if face:
                 px = max(min_px, face["px"])
                 fkw = {"family": face["family"], "weight": face["weight"]}

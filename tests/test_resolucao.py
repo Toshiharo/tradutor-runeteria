@@ -68,5 +68,31 @@ class TrechoTraduzido(unittest.TestCase):
         self.assertEqual([b["pt"] for b in Translator._span_boxes(ln, r, _box)], ["HABILIDADE - E / R"])
 
 
+class FonteEstavel(unittest.TestCase):
+    """Tela parada: a fonte de um texto nao pode ficar trocando entre leituras."""
+
+    def test_escolha_nao_oscila(self):
+        import types
+        import main
+        app = types.SimpleNamespace(_faces_memo={}, _faces_pruned=0.0)
+        app._memo = types.MethodType(main.App._memo, app)
+        b = {"en": "SETTINGS", "x": 900, "y": 15}
+        a1 = {"family": "Lexend SemiBold", "weight": "normal", "px": 12, "below": 0, "track": 0}
+        a2 = {"family": "Inter SemiBold", "weight": "normal", "px": 11, "below": 0, "track": 0}
+        got = [main.App.stable_face(app, b, f)["family"] for f in (a1, a2, a1, a2, a2, a1)]
+        self.assertEqual(set(got[:4]), {"Lexend SemiBold"})  # leituras alternando: fica a primeira
+        px = [main.App.stable_face(app, b, f)["px"] for f in (a1, a2, a1, a2)]
+        self.assertEqual(len(set(px)), 1)
+
+    def test_cor_nao_oscila(self):
+        import types
+        import main
+        app = types.SimpleNamespace(_faces_memo={}, _faces_pruned=0.0)
+        app._memo = types.MethodType(main.App._memo, app)
+        seq = ["#9aa6c3", "#ffffff", "#9aa6c3", "#ffffff", "#9aa6c3"]  # "Bow" lido na pagina Classes
+        got = [main.App.stable_colors(app, {"en": "Bow", "x": 540, "y": 880, "bg": "#1a2031", "fg": c})[1] for c in seq]
+        self.assertEqual(set(got), {"#9aa6c3"})
+
+
 if __name__ == "__main__":
     unittest.main()
