@@ -221,6 +221,24 @@ def make_overlay(hwnd):
     return exclude_from_capture(hwnd)
 
 
+class _CURSORINFO(ctypes.Structure):
+    _fields_ = [("cbSize", wintypes.DWORD), ("flags", wintypes.DWORD), ("hCursor", wintypes.HANDLE),
+                ("ptScreenPos", wintypes.POINT)]
+
+
+_sig(user32.GetCursorInfo, wintypes.BOOL, ctypes.POINTER(_CURSORINFO))
+
+
+def cursor_pos():
+    """(x, y) do cursor na tela, ou None se ele esta escondido (no jogo: andando pelo mundo, sem chat nem
+    menu aberto)."""
+    ci = _CURSORINFO()
+    ci.cbSize = ctypes.sizeof(_CURSORINFO)
+    if not user32.GetCursorInfo(ctypes.byref(ci)) or not ci.flags & 1:  # CURSOR_SHOWING
+        return None
+    return ci.ptScreenPos.x, ci.ptScreenPos.y
+
+
 def exclude_from_capture(hwnd, on=True):
     """on=True: o overlay nao aparece em capturas nem gravacoes. on=False: aparece (para gravar video)."""
     try:

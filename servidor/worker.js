@@ -195,7 +195,8 @@ async function traduzir(request, env) {
       const chat = guardar[i] === false;
       gravar.push(paraCache(chaves[i], pt, chat ? CACHE_CHAT : CACHE_TELA));
       if (!chat && env.MEMORIA) {
-        const meta = textos[i].length + pt.length < 900 ? { en: textos[i], pt } : { en: textos[i].slice(0, 400) };
+        // metadado (ate 1 KB): o texto inteiro, para virar chave da memoria compartilhada do app
+        const meta = textos[i].length + pt.length < 900 ? { en: textos[i], pt } : textos[i].length < 900 ? { en: textos[i] } : {};
         // o plano gratis grava 1.000 por dia: se passar, a traducao vai assim mesmo (e fica no cache)
         gravar.push(env.MEMORIA.put(chaves[i], pt, { metadata: meta }).catch(() => null));
       }

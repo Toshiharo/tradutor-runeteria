@@ -36,6 +36,7 @@ os.makedirs(USER_DIR, exist_ok=True)
 
 SEED_LIBRARY = os.path.join(DATA_DIR, "biblioteca.json")
 SEED_GLOSSARY = os.path.join(DATA_DIR, "glossario.json")
+SEED_SHARED = os.path.join(DATA_DIR, "compartilhada.json")  # memoria do servidor (DeepL), copiada para o repositorio
 USER_OVERRIDES = os.path.join(USER_DIR, "minhas_traducoes.json")
 USER_GLOSSARY = os.path.join(USER_DIR, "glossario.json")
 MEMORY_FILE = os.path.join(USER_DIR, "memoria_automatica.json")
@@ -48,6 +49,7 @@ ERROR_LOG = os.path.join(USER_DIR, "erros.log")
 ONLINE_DIR = os.path.join(USER_DIR, "online")
 ONLINE_LIBRARY = os.path.join(ONLINE_DIR, "biblioteca.json")
 ONLINE_GLOSSARY = os.path.join(ONLINE_DIR, "glossario.json")
+ONLINE_SHARED = os.path.join(ONLINE_DIR, "compartilhada.json")
 
 DEFAULTS = {
     "servidor": "runeteria.com",
@@ -58,7 +60,8 @@ DEFAULTS = {
     "atualizar_pela_internet": True,   # baixa traducoes novas e avisa de versao nova (so leitura, nada e enviado)
     "tamanho_fonte_min": 6,   # em pixels; o overlay nunca fica menor que isso nem que 60% do original
     "permitir_gravar": True,
-    "traducao_online": True,   # texto que nao esta na biblioteca: traduz no servidor (melhor e mais rapido)   # a traducao aparece em gravacoes/transmissoes (OBS, Discord, Xbox Game Bar)
+    "traducao_online": True,
+    "chat_ao_passar_o_mouse": True,  # chat so e traduzido com o chat aberto, na mensagem sob o mouse   # texto que nao esta na biblioteca: traduz no servidor (melhor e mais rapido)   # a traducao aparece em gravacoes/transmissoes (OBS, Discord, Xbox Game Bar)
     "fonte_overlay": "auto",   # auto = mesma fonte do jogo (Lexend/Inter/Cormorant); ou um nome, ex. "Segoe UI"
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo
     "opacidade_fundo": "#141821",

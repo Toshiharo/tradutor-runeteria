@@ -22,6 +22,16 @@ npx wrangler deploy                         # mostra o endereço: https://tradut
 
 Depois coloque o endereço em `app/config.py` (`ONLINE_MT_URL`) e gere uma versão nova do app.
 
+## Memória compartilhada (permanente)
+
+Todo dia o GitHub copia a memória do servidor para `app/data/compartilhada.json`
+(`.github/workflows/memoria.yml`). Os jogadores recebem pelo "Verificar atualizações" e usam essas traduções sem
+internet e sem gastar a cota. Precisa do segredo do repositório, com o mesmo valor do `ADMIN_TOKEN`:
+
+```
+gh secret set TRADUTOR_ADMIN
+```
+
 ## Revisar a memória
 
 `GET /memoria` com o cabeçalho `Authorization: Bearer <ADMIN_TOKEN>` devolve `{itens: [{en, pt}], cursor}`

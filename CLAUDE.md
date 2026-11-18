@@ -120,6 +120,11 @@ Servidor limita por dia, por IP (cifrado) e reserva a cota: >80% do mês o chat 
 Chat (`pipeline.chat_split`): traduz só a mensagem, vai para a fila na hora; português (`looks_portuguese`) e gírias
 (`chat_girias` do glossário) não gastam nada; mensagem de até 3 palavras vai só para a offline.
 "Nome + frase da biblioteca" (`Translator._name_then_phrase`: "Kwaxu has joined") traduz só a frase.
+Chat só com o cursor visível (chat aberto) e só a mensagem sob o mouse (`Translator.pointer`, `_chat_blocks` junta as
+linhas de continuação; caixas `chat: True` somem do slot quando o mouse sai). `chat_ao_passar_o_mouse` no config.
+Memória compartilhada: `.github/workflows/memoria.yml` roda `tools/baixar_memoria.py` todo dia (segredo
+`TRADUTOR_ADMIN` = ADMIN_TOKEN do servidor) e grava `app/data/compartilhada.json` ({texto protegido: tradução});
+o app sincroniza como a biblioteca e consulta antes do servidor (`online_mt.from_shared`), mesmo offline.
 
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura

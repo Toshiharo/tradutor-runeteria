@@ -231,6 +231,14 @@ class App:
                  f"{cfg['atalho_salvar_tela']} salva a tela em texto")
         self.footer.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(14)))
 
+    def load_shared(self):
+        try:
+            from online_mt import load_shared
+            if self.mt is not None:
+                self.mt.shared = load_shared()
+        except Exception:
+            log_error()
+
     def apply_online_mt(self):
         """Liga/desliga a traducao online (o texto em ingles que nao esta na biblioteca vai para o servidor)."""
         if self.mt is None:
@@ -393,6 +401,7 @@ class App:
             got = online.sync_translations() if config.FROZEN else False
             if got:
                 self.lib.reload_seed()
+                self.load_shared()
             if self.mt is not None:
                 self.mt.glossary, self.mt.terms = self.lib.glossary, self.lib.terms
             v = online.newer_version()
@@ -433,6 +442,7 @@ class App:
             from mt import OfflineTranslator
             self.mt = OfflineTranslator(MODEL_DIR, self.lib.glossary, self.lib.terms)
             self.apply_online_mt()
+            self.load_shared()
         except Exception:
             log_error()
             self.mt = None
@@ -505,6 +515,8 @@ class App:
         pool = ThreadPoolExecutor(1)  # o OCR roda aqui; a conferencia rapida continua enquanto ele le
         job = None           # (leitura em andamento, imagem lida, janela)
         resume = False       # o jogo voltou ao foco: redesenha na hora o que continua valendo
+        last_ptr = None      # cursor na ultima conferencia (chat: traduz a mensagem sob o mouse)
+        ptr_dirty = False    # o cursor mudou e as caixas ainda nao foram remontadas
         while True:
             time.sleep(TICK)
             try:
@@ -593,6 +605,16 @@ class App:
                         self.ui_q.put(("boxes", rect, [sl["box"] for sl in self._slots]))
                 resume = False
 
+                # cursor: com o chat aberto o mouse aparece; a mensagem embaixo dele e traduzida. Mexeu de
+                # mensagem (ou abriu/fechou o chat): remonta as caixas da ultima leitura, sem OCR (~10 ms)
+                cur = self.w.cursor_pos() if self.cfg.get("chat_ao_passar_o_mouse", True) else None
+                ptr = (cur[0] - x, cur[1] - y) if cur and 0 <= cur[0] - x < w and 0 <= cur[1] - y < h else None
+                self.translator.pointer = ptr
+                ptr_moved = (ptr is None) != (last_ptr is None) or (
+                    ptr and last_ptr and abs(ptr[0] - last_ptr[0]) + abs(ptr[1] - last_ptr[1]) > 6)
+                if ptr_moved:
+                    last_ptr, ptr_dirty = ptr, True
+
                 # leitura que terminou: so entra o que nao mudou na tela enquanto o OCR lia
                 if job and job[0].done():
                     fut, jimg, jrect = job
@@ -621,6 +643,10 @@ class App:
                     due = moving < STABLE or (removed and now - urgent_since >= MAX_WAIT) or periodic
                 else:
                     due = periodic
+                if ptr_dirty and job is None and self.last_lines and not due:
+                    job = (pool.submit(self.translator.boxes, self.last_lines), img, rect)
+                    ptr_dirty = False
+                    continue
                 due = due and now - last_ocr >= MIN_GAP and job is None
                 if not due:
                     continue
@@ -635,6 +661,7 @@ class App:
                     fut = pool.submit(self.read_screen, img, w, h, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0))
                     ocr_sig = sig
                 job = (fut, img, rect)
+                ptr_dirty = False  # a leitura ja usa o cursor de agora
                 last_ocr, urgent_since, removed = now, None, False
             except Exception:
                 log_error()
@@ -765,6 +792,9 @@ class App:
         """
         slots = [sl for sl in self._slots if not region_changed(img, sl["thumb"])]
         self._note_drops([sl for sl in self._slots if sl not in slots])
+        # chat: a traducao some quando o mouse sai da mensagem (a leitura nova nao a traz mais)
+        slots = [sl for sl in slots if not sl["box"].get("chat")
+                 or any(b.get("chat") and _overlap(b, sl["box"]) for b in boxes)]
         used = set()
         now = time.monotonic()
         for b in boxes:

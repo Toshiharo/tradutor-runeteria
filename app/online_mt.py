@@ -20,6 +20,29 @@ _NUM_TAG = re.compile(r"<k>\s*N(\d+)\s*</k>")
 _NUM = re.compile(r"\d+(?:[.,]\d+)*")
 
 
+def load_shared():
+    """Memoria compartilhada: tudo o que o servidor ja traduziu para algum jogador (DeepL), copiado todo
+    dia para o repositorio (app/data/compartilhada.json). {texto protegido: traducao protegida}.
+    Usada antes do servidor: o que alguem ja viu sai na hora, sem internet e sem gastar a cota."""
+    from config import FROZEN, ONLINE_SHARED, SEED_SHARED, newer, read_json
+    path = ONLINE_SHARED if FROZEN and newer(ONLINE_SHARED, SEED_SHARED) else SEED_SHARED
+    data = read_json(path, {})
+    items = data.get("itens") if isinstance(data, dict) else None
+    return {k: v for k, v in (items or {}).items() if isinstance(k, str) and isinstance(v, str)}
+
+
+def from_shared(shared, prot):
+    """Traducao de um texto protegido pela memoria compartilhada, ou None."""
+    if not shared:
+        return None
+    wrapped, nums = OnlineMT._wrap(prot)
+    hit = shared.get(wrapped)
+    if hit is None:
+        return None
+    back = OnlineMT._unwrap(hit, nums)
+    return None if "<k>" in back else back
+
+
 class OnlineMT:
     def __init__(self, url):
         self.url = url.rstrip("/")

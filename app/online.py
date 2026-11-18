@@ -8,8 +8,8 @@ import os
 import urllib.error
 import urllib.request
 
-from config import (APP_VERSION, ONLINE_DIR, ONLINE_GLOSSARY, ONLINE_LIBRARY, REPO, SEED_GLOSSARY,
-                    SEED_LIBRARY, newer, read_json, write_json)
+from config import (APP_VERSION, ONLINE_DIR, ONLINE_GLOSSARY, ONLINE_LIBRARY, ONLINE_SHARED, REPO, SEED_GLOSSARY,
+                    SEED_LIBRARY, SEED_SHARED, newer, read_json, write_json)
 
 RAW = f"https://raw.githubusercontent.com/{REPO}/main/app/data/"
 LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
@@ -44,13 +44,19 @@ def _valid_glossary(data):
             and isinstance(data.get("termos_fixos", {}), dict))
 
 
+def _valid_shared(data):
+    return (isinstance(data, dict) and isinstance(data.get("itens"), dict)
+            and all(isinstance(k, str) and isinstance(v, str) for k, v in data["itens"].items()))
+
+
 def sync_translations():
-    """Baixa biblioteca.json e glossario.json se mudaram. Devolve True se algo novo foi gravado."""
+    """Baixa biblioteca.json, glossario.json e compartilhada.json se mudaram. True se algo novo foi gravado."""
     os.makedirs(ONLINE_DIR, exist_ok=True)
     etags = read_json(ETAGS, {})
     changed = False
     for name, dest, bundled, valid in (("biblioteca.json", ONLINE_LIBRARY, SEED_LIBRARY, _valid_library),
-                                       ("glossario.json", ONLINE_GLOSSARY, SEED_GLOSSARY, _valid_glossary)):
+                                       ("glossario.json", ONLINE_GLOSSARY, SEED_GLOSSARY, _valid_glossary),
+                                       ("compartilhada.json", ONLINE_SHARED, SEED_SHARED, _valid_shared)):
         try:
             # copia mais velha que a do programa nao esta em uso: baixa de novo mesmo sem mudanca
             raw, etag = _get(RAW + name, etags.get(name) if newer(dest, bundled) else None)

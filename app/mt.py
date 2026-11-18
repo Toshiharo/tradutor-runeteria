@@ -121,6 +121,7 @@ class OfflineTranslator:
         self._rules_key = self._rules_cache = None
         self._lock = threading.Lock()
         self.online = None  # online_mt.OnlineMT: traducao melhor e mais rapida, com a offline de reserva
+        self.shared = {}    # memoria compartilhada (online_mt.load_shared): o que o servidor ja traduziu
         try:
             import ctranslate2
             import sentencepiece as spm
@@ -199,6 +200,15 @@ class OfflineTranslator:
         """Traducao dos textos protegidos: online se der, offline se o servidor nao responder.
         flags: True = texto de tela, False = chat (nao guarda), "offline" = so a traducao offline."""
         flags = flags or [True] * len(prots)
+        if self.shared:
+            from online_mt import from_shared
+            known = [from_shared(self.shared, p) for p in prots]
+            if any(k is not None for k in known):
+                todo = [i for i, k in enumerate(known) if k is None]
+                if todo:
+                    for i, r in zip(todo, self._backend([prots[i] for i in todo], [flags[i] for i in todo])):
+                        known[i] = r
+                return known
         if self.online is not None and self.online.available() and any(f != "offline" for f in flags):
             res = [None] * len(prots)
             on = [i for i, f in enumerate(flags) if f != "offline"]
@@ -237,7 +247,7 @@ class OfflineTranslator:
     def translate_many(self, texts, keeps=None, keep_flags=None):
         """Traduz varios textos de uma vez (uma tela nova inteira sai bem mais rapido que um por um).
         keep_flags: False = nao guardar na memoria online (mensagem de chat)."""
-        if not self.ok and self.online is None:
+        if not self.ok and self.online is None and not self.shared:
             return [None] * len(texts)
         flags_all = keep_flags or [True] * len(texts)
         keeps = keeps or [()] * len(texts)

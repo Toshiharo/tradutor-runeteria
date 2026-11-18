@@ -280,6 +280,7 @@ class Translator:
         self._composed = {}    # texto -> traducao montada por partes (ou None)
         self._unknown = {}     # palavra -> o modelo de traducao nao conhece (nome inventado)
         self.chat = {}         # mensagem de chat -> traducao (fica so na memoria do programa)
+        self.pointer = None    # (x, y) do cursor na janela do jogo, ou None (chat fechado: nao traduz chat)
         if self._mt_ok():
             threading.Thread(target=self._worker, daemon=True).start()
 
@@ -611,11 +612,65 @@ class Translator:
         self._maybe_queue(text)
         return None
 
+    def _chat_pt(self, msg):
+        """Traducao de uma mensagem de chat: (texto, origem), ou None (ja e portugues, ou foi para a fila)."""
+        pt, origin = self._slang(msg), "manual"  # "ty", "lol gg": pronto, sem fila e sem cota
+        if pt:
+            return pt, origin
+        if looks_portuguese(msg) or not looks_translatable(msg):
+            return None
+        hit = self.lib.lookup(msg, 92)
+        if hit:
+            return hit[0], hit[1]
+        pt = self.chat.get(normalize(msg))
+        if pt:
+            return pt, "auto"
+        self._queue_chat(msg)
+        return None
+
+    @staticmethod
+    def _chat_blocks(lines):
+        """Mensagens do chat: a linha com "canal nome:" e as linhas logo abaixo em que a mensagem continua.
+        Separadas antes de montar paragrafos: com a mesma cor e altura, o chat inteiro virava um paragrafo
+        so, que ia junto para a traducao automatica ("Minnie420: ... G (NA-HUB) Skyzzl: ...")."""
+        rows = sorted(lines, key=lambda l: (l["y"], l["x"]))
+        blocks, used = [], set()
+        for i, ln in enumerate(rows):
+            if id(ln) in used or not chat_split(ln["text"]):
+                continue
+            blk = [ln]
+            used.add(id(ln))
+            for nx in rows[i + 1:]:
+                last = blk[-1]
+                gap = nx["y"] - (last["y"] + last["h"])
+                if gap > last["h"] * 0.9:
+                    break
+                if (id(nx) in used or gap < -last["h"] * 0.3 or chat_split(nx["text"])
+                        or abs(nx["x"] - ln["x"]) > ln["h"] * 3 or not 0.75 < nx["h"] / ln["h"] < 1.33):
+                    continue
+                blk.append(nx)
+                used.add(id(nx))
+            blocks.append(blk)
+        return blocks, used
+
+    def _hovered(self, blk):
+        if not self.pointer:
+            return False
+        px, py = self.pointer
+        x0 = min(l["x"] for l in blk) - blk[0]["h"]
+        x1 = max(l["x"] + l["w"] for l in blk) + blk[0]["h"] * 2
+        y0 = blk[0]["y"] - blk[0]["h"] * 0.4
+        y1 = max(l["y"] + l["h"] for l in blk) + blk[0]["h"] * 0.4
+        return x0 <= px <= x1 and y0 <= py <= y1
+
     def boxes(self, lines):
         """Devolve [{'x','y','w','h','line_h','pt','origin','en'}]."""
         self._prune()
         lines = join_known(lines, self.lib.knows)
         out = []
+        chat_blocks, chat_ids = self._chat_blocks(lines)
+        if chat_ids:
+            lines = [l for l in lines if id(l) not in chat_ids]
 
         def box(geo, first, pt, origin, en, align, n_lines):
             d = {**{k: geo[k] for k in "xywh"}, "line_h": first["h"], "pt": pt, "origin": origin,
@@ -634,6 +689,35 @@ class Translator:
                 elif d["align"] == "center" and d["room_r"] < first["h"] and d["room_r"] * 4 < d["room_l"]:
                     d["align"] = "right"
             return d
+
+        # chat: so a mensagem sob o cursor, e so com o cursor visivel (chat aberto). Andando pelo mundo o
+        # chat fica em ingles e nao gasta nada; quem quer ler passa o mouse em cima
+        for blk in chat_blocks:
+            if not self._hovered(blk):
+                continue
+            k, first_msg = chat_split(blk[0]["text"])
+            msg = " ".join([first_msg] + [l["text"] for l in blk[1:]])
+            r = self._chat_pt(msg)
+            if not r:
+                continue
+            pt, origin = r
+            first = blk[0]
+            if len(blk) == 1:
+                toks = first["text"].split()
+                pieces = self._span_boxes(first, (" ".join(toks[:k] + [pt]), origin, [(k, len(toks), pt, origin)]),
+                                          box, "left")
+                if pieces:
+                    for p in pieces:
+                        p["chat"] = True
+                    out.extend(pieces)
+                    continue
+            geo = {"x": min(l["x"] for l in blk), "y": first["y"],
+                   "w": max(l["x"] + l["w"] for l in blk) - min(l["x"] for l in blk),
+                   "h": blk[-1]["y"] + blk[-1]["h"] - first["y"], "lines": blk}
+            prefix = " ".join(first["text"].split()[:k])
+            d = box(geo, first, prefix + " " + pt, origin, " ".join(l["text"] for l in blk), "left", len(blk))
+            d["chat"] = True
+            out.append(d)
 
         titles = self._card_titles(lines)
         for b in group_blocks(lines):

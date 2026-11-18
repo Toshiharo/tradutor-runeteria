@@ -101,6 +101,78 @@ class Economia(unittest.TestCase):
         self.assertEqual(FakeOnline.sent, [["the server is full of people from an old regime"]])
 
 
+class ChatNoMouse(unittest.TestCase):
+    """Chat so e traduzido com o chat aberto (cursor visivel), na mensagem sob o mouse."""
+
+    def _lines(self):
+        def ln(text, y, x=10):
+            words, cx = [], x
+            for t in text.split():
+                words.append({"text": t, "x": cx, "y": y, "w": len(t) * 6, "h": 10})
+                cx += len(t) * 6 + 4
+            return {"text": text, "x": x, "y": y, "w": cx - 4 - x, "h": 10, "words": words}
+        return [ln("G (NA-DRV) Bob_99: ty gg", 100), ln("G (NA-HUB) Ann_7: lol", 114),
+                ln("G (NA-HUB) Zed_1: the server is full of people", 128), ln("from an old regime", 142, x=12)]
+
+    def test_sem_cursor_nada_do_chat(self):
+        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        tr.pointer = None
+        self.assertEqual(tr.boxes(self._lines()), [])
+
+    def test_so_a_mensagem_sob_o_mouse(self):
+        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        tr.pointer = (60, 104)
+        out = tr.boxes(self._lines())
+        self.assertEqual([b["pt"] for b in out], ["valeu gg"])
+        self.assertTrue(all(b.get("chat") for b in out))
+        tr.pointer = (60, 118)
+        self.assertEqual([b["pt"] for b in tr.boxes(self._lines())], ["kkkk"])
+
+    def test_mensagem_em_duas_linhas_e_uma_so(self):
+        blocks, _ = Translator._chat_blocks(self._lines())
+        self.assertEqual([[l["text"] for l in b] for b in blocks],
+                         [["G (NA-DRV) Bob_99: ty gg"], ["G (NA-HUB) Ann_7: lol"],
+                          ["G (NA-HUB) Zed_1: the server is full of people", "from an old regime"]])
+
+        class FakeMT:
+            ok, online, glossary, terms = True, None, [], {}
+            sent = []
+
+            def translate_many(self, texts, keeps=None, keep_flags=None):
+                FakeMT.sent.extend(texts)
+                return ["o servidor está cheio de gente de um regime antigo"]
+
+            def pieces(self, w):
+                return 1
+
+        tr = Translator(LIB, FakeMT(), dict(config.DEFAULTS))
+        tr.pointer = (40, 146)  # mouse na segunda linha da mensagem
+        tr.boxes(self._lines())
+        for _ in range(50):
+            if FakeMT.sent and not tr.pending:
+                break
+            time.sleep(0.02)
+        self.assertEqual(FakeMT.sent, ["the server is full of people from an old regime"])
+        out = tr.boxes(self._lines())
+        self.assertEqual([b["pt"] for b in out], ["G (NA-HUB) Zed_1: o servidor está cheio de gente de um regime antigo"])
+        self.assertEqual(out[0]["lines"], 2)
+
+
+class MemoriaCompartilhada(unittest.TestCase):
+    def test_traducao_de_outro_jogador_sai_sem_internet(self):
+        mt = OfflineTranslator(config.MODEL_DIR, LIB.glossary, LIB.terms)
+        mt.online = None
+        mt.shared = {"Your <k>Z0</k> is full of <k>N0</k> stones": "Sua <k>Z0</k> está cheia de <k>N0</k> pedras"}
+        mt._raw = lambda texts: ["[offline]" for _ in texts]
+        self.assertEqual(mt.translate_many(["Your bag is full of 30 stones"]), ["Sua bolsa está cheia de 30 pedras"])
+        self.assertEqual(mt.translate_many(["Something else entirely here"]), ["[offline]"])
+
+    def test_arquivo_do_programa_e_valido(self):
+        from online import _valid_shared
+        with open(config.SEED_SHARED, encoding="utf-8") as f:
+            self.assertTrue(_valid_shared(__import__("json").load(f)))
+
+
 class Online(unittest.TestCase):
     def test_marcador_vai_protegido_e_volta(self):
         w, nums = OnlineMT._wrap("Open your Zq0x & check <stats>")
