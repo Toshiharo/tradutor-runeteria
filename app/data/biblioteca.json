@@ -150,7 +150,7 @@
 "reviewed": true
 },
 "SIGNATURE": {
-"pt": "ASSINATURA",
+"pt": "SIGNATURE",
 "source": "manual",
 "reviewed": true
 },
@@ -7280,7 +7280,7 @@
 "reviewed": true
 },
 "Auto Swap Weapons": {
-"pt": "Trocar armas automaticamente",
+"pt": "Troca automática",
 "source": "manual",
 "reviewed": true
 },
@@ -13841,6 +13841,31 @@
 },
 "RUNE BACKPACK": {
 "pt": "RUNE BACKPACK",
+"source": "manual",
+"reviewed": true
+},
+"full signature": {
+"pt": "signature completa",
+"source": "manual",
+"reviewed": true
+},
+"Signature Slot": {
+"pt": "Espaço da Signature",
+"source": "manual",
+"reviewed": true
+},
+"ABILITIES FOR Q": {
+"pt": "HABILIDADES DO Q",
+"source": "manual",
+"reviewed": true
+},
+"ABILITIES FOR E": {
+"pt": "HABILIDADES DO E",
+"source": "manual",
+"reviewed": true
+},
+"ABILITIES FOR R": {
+"pt": "HABILIDADES DO R",
 "source": "manual",
 "reviewed": true
 }

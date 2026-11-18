@@ -49,11 +49,11 @@ ONLINE_GLOSSARY = os.path.join(ONLINE_DIR, "glossario.json")
 DEFAULTS = {
     "servidor": "runeteria.com",
     "intervalo_segundos": 0.8,
-    "escala_ocr": 1.6,
+    "escala_ocr": "auto",   # "auto" = acompanha o tamanho do texto (qualquer resolucao); ou um numero, ex. 1.6
     "similaridade_minima": 86,
     "traduzir_desconhecidos": True,
     "atualizar_pela_internet": True,   # baixa traducoes novas e avisa de versao nova (so leitura, nada e enviado)
-    "tamanho_fonte_min": 9,
+    "tamanho_fonte_min": 6,   # em pixels; o overlay nunca fica menor que isso nem que 60% do original
     "fonte_overlay": "auto",   # auto = mesma fonte do jogo (Lexend/Inter/Cormorant); ou um nome, ex. "Segoe UI"
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo
     "opacidade_fundo": "#141821",

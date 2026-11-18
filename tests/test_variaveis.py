@@ -51,13 +51,23 @@ class Nomes(unittest.TestCase):
 
 class Tooltip(unittest.TestCase):
     def test_valores(self):
-        for t in ["143", "+7", "7.7s", "1-22%", "(1-6%)", "4/4", "18:12", "32...", "Lv.20", "Q", "x3", "+0.4"]:
+        for t in ["143", "+7", "7.7s", "1-22%", "(1-6%)", "4/4", "18:12", "32...", "Lv.20", "Q", "x3", "+0.4",
+                  "32.„", "s", "g.6s", "7.75"]:  # sujeira real do OCR na pagina Classes
             self.assertTrue(is_value_token(t), t)
-        for t in ["Armor", "damage", "a", "Lv"]:
+        for t in ["Armor", "damage", "a", "Lv", "Slot", "go"]:
             self.assertFalse(is_value_token(t), t)
 
     def test_atributos_por_partes(self):
-        self.assertEqual(TR.compose("Armor 15 Vitality +7")[0], "Armadura 15 Vitalidade +7")
+        r = TR.compose("Armor 15 Vitality +7")
+        self.assertEqual(r[0], "Armadura 15 Vitalidade +7")
+        self.assertEqual([(i, j, pt) for i, j, pt, _ in r[2]], [(0, 1, "Armadura"), (2, 3, "Vitalidade")])
+
+    def test_so_a_palavra_traduzida_e_coberta(self):
+        r = TR.compose("ABILITY - E / R")
+        self.assertEqual([(i, j, pt) for i, j, pt, _ in r[2]], [(0, 1, "HABILIDADE")])
+        r = TR.compose("530 damage · full signature")
+        self.assertIsNotNone(r)
+        self.assertEqual(r[2][0][:3], (1, 2, "dano"))
 
     def test_linha_de_skill_com_separadores(self):
         r = TR.compose("Bleeding Slice 143 damage • 7.7s • 32...")
@@ -100,7 +110,8 @@ class CasosDoReplay(unittest.TestCase):
 
     def test_palavra_comum_copiada_nao_e_variavel(self):
         self.assertIsNone(adapt("Max level", "ITEM LEVEL", "NÍVEL DO ITEM", False))
-        self.assertIsNone(LIB.lookup("Max level"))
+        r = LIB.lookup("Max level")  # pode existir na memoria automatica ("Nivel maximo"), mas nunca o "ITEM" trocado
+        self.assertTrue(r is None or "Max" not in r[0], r)
 
     def test_erro_de_ocr_so_em_texto_quase_igual(self):
         self.assertIsNone(adapt("Requires", "REQUEST", "PEDIR", False))
@@ -125,6 +136,36 @@ class CasosDoReplay(unittest.TestCase):
 
     def test_termo_fixo_nao_e_protegido_como_nome(self):
         self.assertNotIn("Pickaxe", TR.names_in("Iron Pickaxe and 4 more Level 8"))
+
+
+class Cards(unittest.TestCase):
+    def _l(self, text, x, y, h=12):
+        return {"text": text, "x": x, "y": y, "w": len(text) * 7, "h": h}
+
+    def test_titulo_de_card_acima_de_atributo_e_nome(self):
+        title = self._l("Hemorrhage", 300, 460)
+        stat = self._l("145 damage • 7.7s • 32...", 284, 480, 10)
+        other = self._l("Your Build", 230, 140)
+        ids = TR._card_titles([title, stat, other])
+        self.assertIn(id(title), ids)
+        self.assertNotIn(id(other), ids)
+        self.assertIsNone(TR._one("Hemorrhage", title=True))
+
+    def _row(self, tokens, gap):
+        words, x = [], 0
+        for tok in tokens:
+            words.append({"text": tok, "x": x, "y": 0, "w": len(tok) * 7, "h": 9})
+            x += len(tok) * 7 + gap
+        return {"text": " ".join(tokens), "x": 0, "y": 0, "w": x - gap, "h": 9, "words": words}
+
+    def test_fileira_de_abas_vira_uma_caixa_por_aba(self):
+        box = lambda geo, first, pt, origin, en, align, n: {"pt": pt, "en": en, **{k: geo[k] for k in "xywh"}}
+        row = TR._label_row(self._row(["PROFESSIONS", "CLASSES", "PARTY"], 30), box, [])
+        self.assertEqual([b["pt"] for b in row], ["PROFISSÕES", "GRUPO"])  # CLASSES fica igual
+
+    def test_frase_comum_nao_e_fileira(self):
+        box = lambda *a: {}
+        self.assertEqual(TR._label_row(self._row(["Max", "level"], 3), box, []), [])
 
 
 if __name__ == "__main__":

@@ -62,7 +62,7 @@ def free_room(img, x, y, w, h, bg, limit=None):
     Anda para os lados enquanto a cor continuar igual a do fundo; para na borda do botao/painel
     ou no texto vizinho. E o espaco que a traducao (quase sempre mais longa) pode ocupar.
     """
-    limit = limit or min(int(w * 1.2) + 20, 400)
+    limit = limit or min(int(w * 1.2) + 20, max(400, int(h * 40)))  # 400 px em 1080p, proporcional ao texto
     # comeca 3 px fora da caixa: a borda suavizada da ultima letra costuma vazar da caixa do OCR
     x0, x1 = max(0, int(x) - 3), min(img.width, int(x + w) + 3)
     rows = sorted({min(img.height - 1, max(0, int(y + h * f))) for f in (0.15, 0.5, 0.85)})
@@ -302,7 +302,9 @@ def avail_width(box, margin=6):
         extra = max(0, box["room_l"] - margin)
     else:
         extra = max(0, box["room_r"] - margin)
-    return max(w * 1.15, min(w + extra, max(w * 2.2, w + 110)), 40)
+    grow = max(w * 2.2, w + 11 * box.get("line_h", 10))  # cresce no maximo isso (proporcional ao texto)
+    # nunca passa do espaco livre medido: depois dele vem outro texto, icone ou a borda do painel
+    return min(w + extra, grow)
 
 
 def font_px(text, line_h):
@@ -328,7 +330,7 @@ def guess_align(line, all_lines, tol=None):
     for o in all_lines:
         dy = abs(o["y"] - line["y"])
         # mesma regiao da tela (titulos de secao de um painel ficam a ate ~250 px um do outro)
-        if o is line or dy > max(line["h"] * 30, 250) or dy < line["h"] * 0.5:
+        if o is line or dy > line["h"] * 30 or dy < line["h"] * 0.5:  # mesma regiao, proporcional ao texto
             continue
         if abs(o["x"] - line["x"]) <= tol:
             left += 1

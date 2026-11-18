@@ -31,6 +31,48 @@ YELLOW = "#ffdd33"       # yellow-400   status atencao
 RED = "#da6262"          # red-400      status erro
 RED_BTN, RED_BTN_HI, RED_BTN_PRESS = "#d14b4b", "#da6262", "#b13f3f"  # red-500/400/600
 
+_SCALE = None
+
+
+def scale():
+    """Escala do Windows para este monitor (100% = 1.0, 150% = 1.5). RT_UI_SCALE forca um valor (teste)."""
+    global _SCALE
+    if _SCALE is None:
+        try:
+            v = float(os.environ.get("RT_UI_SCALE", "0"))
+        except ValueError:
+            v = 0.0
+        if not v:
+            try:
+                v = ctypes.windll.user32.GetDpiForSystem() / 96.0
+            except Exception:
+                v = 1.0
+        # a janela tem ~830 px de altura em 100%: nunca maior que a area util da tela
+        # (notebook 1080p em 150% ou tela de 1366x768 cortariam a janela)
+        work = _work_area_height()
+        if work:
+            v = min(v, work * 0.92 / 830.0)
+        _SCALE = max(0.75, min(v, 3.0))
+    return _SCALE
+
+
+def _work_area_height():
+    """Altura da area util da tela principal (sem a barra de tarefas), em pixels; 0 se nao souber."""
+    try:
+        from ctypes import wintypes
+        r = wintypes.RECT()
+        if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(r), 0):  # SPI_GETWORKAREA
+            return r.bottom - r.top
+    except Exception:
+        pass
+    return 0
+
+
+def S(v):
+    """Tamanho em pixels de tela para um tamanho pensado em 100% de escala."""
+    return int(round(v * scale()))
+
+
 _FALLBACK = {"Cormorant": "Georgia", "Lexend": "Segoe UI", "Lexend SemiBold": "Segoe UI Semibold",
              "Inter": "Segoe UI", "Inter SemiBold": "Segoe UI Semibold"}
 _fonts = {}
@@ -64,7 +106,7 @@ def font(role):
     }[role]
     if family not in _families:
         family = _FALLBACK.get(family, "Segoe UI")
-    _fonts[role] = tkfont.Font(family=family, size=-size, weight=weight)
+    _fonts[role] = tkfont.Font(family=family, size=-S(size), weight=weight)
     return _fonts[role]
 
 
@@ -85,7 +127,7 @@ class RButton(tk.Canvas):
     }
 
     def __init__(self, parent, text, command, kind="secondary", height=38, bg=PANEL, small=False):
-        super().__init__(parent, height=height, width=10, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
+        super().__init__(parent, height=S(height), width=10, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
         self.text, self.command, self.kind = text, command, kind
         self.enabled, self.state, self.small = True, "normal", small
         self.bind("<Configure>", lambda e: self._draw())
@@ -127,17 +169,17 @@ class RButton(tk.Canvas):
             fill = {"hover": hover, "pressed": pressed}.get(state, fill)
         down = 1 if state == "pressed" else 0
         if not down:
-            round_rect(self, 0, 2, w, h, 6, fill=shade, outline="")       # sombra de baixo (relevo)
-        round_rect(self, 0, down * 2, w, h - 2 + down * 2, 6, fill=fill, outline="")
+            round_rect(self, 0, S(2), w, h, S(6), fill=shade, outline="")       # sombra de baixo (relevo)
+        round_rect(self, 0, down * S(2), w, h - S(2) + down * S(2), S(6), fill=fill, outline="")
         f = font("caption" if self.small else "button")
-        self.create_text(w / 2, (h - 2) / 2 + down * 2, text=self.text.upper(), font=f, fill=fg)
+        self.create_text(w / 2, (h - S(2)) / 2 + down * S(2), text=self.text.upper(), font=f, fill=fg)
 
 
 class Toggle(tk.Canvas):
     """Chave liga/desliga em pilula: desligada em base-bg-600, ligada em dourado."""
 
     def __init__(self, parent, value=False, command=None, bg=CARD):
-        super().__init__(parent, width=38, height=20, bg=bg, highlightthickness=0, bd=0, cursor="hand2")
+        super().__init__(parent, width=S(38), height=S(20), bg=bg, highlightthickness=0, bd=0, cursor="hand2")
         self.value, self.command, self.enabled = value, command, True
         self.bind("<ButtonRelease-1>", self._click)
         self._draw()
@@ -161,21 +203,22 @@ class Toggle(tk.Canvas):
     def _draw(self):
         self.delete("all")
         on = self.value and self.enabled
-        round_rect(self, 0, 0, 38, 20, 10, fill=GOLD if on else RAISED, outline="")
-        x = 28 if self.value else 10
-        self.create_oval(x - 7, 3, x + 7, 17, fill=ON_GOLD if on else (MUTED if self.enabled else DISABLED), outline="")
+        round_rect(self, 0, 0, S(38), S(20), S(10), fill=GOLD if on else RAISED, outline="")
+        x = S(28) if self.value else S(10)
+        self.create_oval(x - S(7), S(3), x + S(7), S(17), fill=ON_GOLD if on else (MUTED if self.enabled else DISABLED), outline="")
 
 
 def gold_divider(parent, bg=PANEL):
     """Filete dourado de 1px com um losango no meio (DecorativeDividerGold do kit)."""
-    c = tk.Canvas(parent, height=11, bg=bg, highlightthickness=0, bd=0)
+    c = tk.Canvas(parent, height=S(11), bg=bg, highlightthickness=0, bd=0)
 
     def draw(_=None):
         c.delete("all")
         w = c.winfo_width()
-        c.create_line(0, 5, w / 2 - 9, 5, fill=GOLD_STRONG)
-        c.create_line(w / 2 + 9, 5, w, 5, fill=GOLD_STRONG)
-        c.create_polygon(w / 2, 0, w / 2 + 5, 5, w / 2, 10, w / 2 - 5, 5, fill=GOLD, outline="")
+        m, r = S(5), S(5)
+        c.create_line(0, m, w / 2 - S(9), m, fill=GOLD_STRONG, width=max(1, S(1)))
+        c.create_line(w / 2 + S(9), m, w, m, fill=GOLD_STRONG, width=max(1, S(1)))
+        c.create_polygon(w / 2, m - r, w / 2 + r, m, w / 2, m + r, w / 2 - r, m, fill=GOLD, outline="")
     c.bind("<Configure>", draw)
     return c
 
@@ -187,7 +230,7 @@ def card(parent, title=None, bg=CARD):
     inner.pack(fill="both", expand=True, padx=1, pady=1)
     if title:
         tk.Label(inner, text=title.upper(), font=font("heading"), fg=GOLD, bg=bg, anchor="w").pack(
-            fill="x", padx=12, pady=(10, 4))
+            fill="x", padx=S(12), pady=(S(10), S(4)))
     return outer, inner
 
 
@@ -198,12 +241,12 @@ class StatusRow(tk.Frame):
 
     def __init__(self, parent, name, bg=CARD):
         super().__init__(parent, bg=bg)
-        self.dot = tk.Canvas(self, width=10, height=10, bg=bg, highlightthickness=0, bd=0)
-        self.dot.pack(side="left", padx=(12, 8))
-        self._oval = self.dot.create_oval(1, 1, 9, 9, fill=DISABLED, outline="")
+        self.dot = tk.Canvas(self, width=S(10), height=S(10), bg=bg, highlightthickness=0, bd=0)
+        self.dot.pack(side="left", padx=(S(12), S(8)))
+        self._oval = self.dot.create_oval(S(1), S(1), S(9), S(9), fill=DISABLED, outline="")
         tk.Label(self, text=name, font=font("label"), fg=TEXT_STRONG, bg=bg).pack(side="left")
         self.value = tk.Label(self, text="", font=font("body"), fg=MUTED, bg=bg, anchor="e", justify="right")
-        self.value.pack(side="right", padx=(8, 12))
+        self.value.pack(side="right", padx=(S(8), S(12)))
         self.button = None
 
     def set(self, state, text):
@@ -217,5 +260,5 @@ class StatusRow(tk.Frame):
             self.button = None
         if text:
             self.button = RButton(self, text, command, kind="primary", height=28, bg=self["bg"], small=True)
-            self.button.config(width=96)
-            self.button.pack(side="right", padx=(0, 12), before=self.value)
+            self.button.config(width=S(96))
+            self.button.pack(side="right", padx=(S(0), S(12)), before=self.value)

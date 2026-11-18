@@ -27,7 +27,8 @@ def _from_words(words):
     x = min(w["x"] for w in words)
     y = min(w["y"] for w in words)
     return {"text": " ".join(w["text"] for w in words), "x": x, "y": y,
-            "w": max(w["x"] + w["w"] for w in words) - x, "h": max(w["y"] + w["h"] for w in words) - y}
+            "w": max(w["x"] + w["w"] for w in words) - x, "h": max(w["y"] + w["h"] for w in words) - y,
+            "words": list(words)}
 
 
 def tidy_lines(lines):
@@ -57,6 +58,10 @@ def tidy_lines(lines):
         segs.append(cur)
         for seg in segs:
             for end in (0, -1):  # ponta esquerda, depois a direita
+                # borda de icone lida como "_1", "|1": pedaco curto sem letra, colado no texto
+                while (len(seg) > 1 and len(seg[end]["text"]) == 2 and not re.search(r"[A-Za-z]", seg[end]["text"])
+                       and re.search(r"[_|\/\[\]()]", seg[end]["text"])):
+                    seg.pop(end)
                 while len(seg) > 1 and len(seg[end]["text"]) == 1 and not seg[end]["text"].isdigit():
                     edge, nxt = seg[end], seg[1 if end == 0 else -2]
                     gap = (nxt["x"] - (edge["x"] + edge["w"])) if end == 0 else (edge["x"] - (nxt["x"] + nxt["w"]))
@@ -99,6 +104,10 @@ def join_known(lines, knows):
                 break
             m = dict(a)
             m["text"] = a["text"] + " " + b["text"]
+            if a.get("words") and b.get("words"):
+                m["words"] = a["words"] + b["words"]
+            else:
+                m.pop("words", None)
             m["w"] = b["x"] + b["w"] - a["x"]
             m["h"] = max(a["y"] + a["h"], b["y"] + b["h"]) - min(a["y"], b["y"])
             m["y"] = min(a["y"], b["y"])
@@ -124,8 +133,10 @@ def group_blocks(lines):
             gap = ln["y"] - (last["y"] + last["h"])
             same_col = abs(ln["x"] - b["x"]) < max(12, last["h"] * 1.5) or (
                 abs((ln["x"] + ln["w"] / 2) - (b["x"] + b["w"] / 2)) < last["h"] * 2)  # texto centralizado
-            similar_h = 0.7 < (ln["h"] / max(last["h"], 1)) < 1.4
-            if -2 <= gap < last["h"] * 0.9 and same_col and similar_h:
+            similar_h = 0.8 < (ln["h"] / max(last["h"], 1)) < 1.25
+            # cor diferente = outro elemento (titulo do card branco, detalhe cinza embaixo)
+            same_color = _near(ln.get("fg"), last.get("fg"), 60) if ln.get("fg") and last.get("fg") else True
+            if -2 <= gap < last["h"] * 0.9 and same_col and similar_h and same_color:
                 b["lines"].append(ln)
                 x2 = max(b["x"] + b["w"], ln["x"] + ln["w"])
                 b["x"] = min(b["x"], ln["x"])
@@ -292,56 +303,67 @@ class Translator:
         return pt, origin
 
     def _compose(self, text):
-        parts = SEP_RE.split(text)
-        out, origins = [], set()
-        for k, seg in enumerate(parts):
-            if k % 2 or not seg.strip() or only_values(seg):
-                out.append(seg)  # separador ou so valores
+        toks = text.split()
+        segs, cur = [], []
+        for k, t in enumerate(toks):
+            if t in ("•", "·", "|"):  # separador de tooltip
+                if cur:
+                    segs.append(cur)
+                cur = []
                 continue
-            core = seg.strip()
-            if len(parts) > 1:
-                hit = self._lookup_piece(core)
+            cur.append(k)
+        if cur:
+            segs.append(cur)
+        spans = []  # (primeira palavra, depois da ultima, traducao, origem)
+        multi = len(segs) > 1
+        for seg in segs:
+            words = [toks[k] for k in seg]
+            phrase = " ".join(words)
+            if all(is_value_token(w) for w in words):
+                continue
+            if multi:
+                hit = self._lookup_piece(phrase)
                 if hit:
-                    out.append(seg.replace(core, hit[0]))
-                    origins.add(hit[1])
+                    spans.append((seg[0], seg[-1] + 1, hit[0], hit[1]))
                     continue
-            if self.is_name(core):
-                out.append(seg)
+            if self.is_name(phrase):
                 continue
             # pedaco com valores no meio ("Armor 15 Vitality +7"): termo a termo, mas so em linha
             # de atributo (tem numero e nao tem palavra de frase), nunca em frase comum
-            toks = core.split()
-            if not any(is_value_token(t) for t in toks) or any(t.lower() in FUNC_WORDS for t in toks):
+            if not any(is_value_token(w) for w in words) or any(w.lower() in FUNC_WORDS for w in words):
                 return None
-            res, i = [], 0
-            while i < len(toks):
-                if is_value_token(toks[i]):
-                    res.append(toks[i])
+            i = 0
+            while i < len(words):
+                if is_value_token(words[i]):
                     i += 1
                     continue
                 j = i
-                while j < len(toks) and not is_value_token(toks[j]):
+                while j < len(words) and not is_value_token(words[j]):
                     j += 1
-                run = toks[i:j]
-                done = False
+                run, done = words[i:j], False
                 for end in range(len(run), 0, -1):  # maior pedaco conhecido primeiro
-                    phrase = " ".join(run[:end])
-                    hit = self._lookup_piece(phrase)
+                    ph = " ".join(run[:end])
+                    hit = self._lookup_piece(ph)
                     # no comeco da linha de atributo vem o nome da skill/item ("Hemorrhage 145 damage")
-                    lead = i == 0 and all(w[:1].isupper() for w in run[:end]) and not phrase.isupper()
-                    if hit or self.is_name(phrase) or (lead and end == len(run)):
-                        res.append(hit[0] if hit else phrase)
-                        if hit:
-                            origins.add(hit[1])
+                    lead = i == 0 and all(w[:1].isupper() for w in run[:end]) and not ph.isupper()
+                    if hit or self.is_name(ph) or (lead and end == len(run)):
+                        if hit and hit[0] != ph:
+                            spans.append((seg[i], seg[i + end - 1] + 1, hit[0], hit[1]))
                         i += end
                         done = True
                         break
                 if not done:
                     return None
-            out.append(seg.replace(core, " ".join(res)))
-        if not origins:
+        if not spans:
             return None  # nada traduzido: deixa o original
-        return "".join(out), ("auto" if "auto" in origins else "manual")
+        out, k = [], 0
+        for i, j, pt, _ in spans:
+            out.extend(toks[k:i])
+            out.append(pt)
+            k = j
+        out.extend(toks[k:])
+        origin = "auto" if any(sp[3] == "auto" for sp in spans) else "manual"
+        return " ".join(out), origin, spans
 
     def _known_words(self):
         """Palavras que e normal sairem iguais na traducao: nomes do glossario e termos mantidos em ingles."""
@@ -383,15 +405,17 @@ class Translator:
             for k in [k for k, rec in self.seen.items() if now - rec[1] > FORGET_SECONDS]:
                 del self.seen[k]
 
-    def _one(self, text, allow_mt=True):
+    def _one(self, text, allow_mt=True, parts=True, title=False):
         hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86))
         if hit:
             return hit[0], hit[1]
+        if title:
+            return None  # titulo de card de skill/item: nome proprio, fica em ingles
+        r = self.compose(text) if parts else None  # linha de tooltip/atributo: monta por partes
+        if r:
+            return r  # (traducao, origem, trechos)
         if not allow_mt:
             return None
-        r = self.compose(text)  # linha de tooltip/atributo: monta por partes
-        if r:
-            return r
         if self.is_name(text) or is_noise(text, self.unknown_word):
             return None  # nome proprio ou nome de jogador: fica em ingles, sem caixa por cima
         self._maybe_queue(text)
@@ -416,10 +440,11 @@ class Translator:
                 d["room_r"] = max(0, min(l.get("room_r", 0) - (geo["x"] + geo["w"] - l["x"] - l["w"]) for l in ls))
             return d
 
+        titles = self._card_titles(lines)
         for b in group_blocks(lines):
             multi = len(b["lines"]) > 1
             full = " ".join(l["text"] for l in b["lines"])
-            r = self._one(full, allow_mt=False) if multi else None
+            r = self._one(full, allow_mt=False, parts=False) if multi else None  # paragrafo inteiro: so biblioteca
             if r:
                 out.append(box(b, b["lines"][0], r[0], r[1], full, block_align(b["lines"]), len(b["lines"])))
                 continue
@@ -427,10 +452,134 @@ class Translator:
             for ln in b["lines"]:
                 if ln.get("cut"):
                     continue  # o OCR pegou so um pedaco da palavra: melhor nao traduzir
-                r = self._one(ln["text"], allow_mt=not multi)
-                if r:
+                row = [] if self.lib.knows(ln["text"]) else self._label_row(ln, box, lines)
+                if row:  # abas lidas juntas: cada rotulo no seu lugar, sem traducao automatica
                     hits += 1
+                    out.extend(row)
+                    continue
+                r = self._one(ln["text"], allow_mt=not multi, title=id(ln) in titles)
+                if not r:
+                    continue
+                hits += 1
+                pieces = self._span_boxes(ln, r, box) if len(r) > 2 else None
+                if pieces is not None:
+                    out.extend(pieces)
+                else:
                     out.append(box(ln, ln, r[0], r[1], ln["text"], guess_align(ln, lines), 1))
             if multi and hits == 0:
                 self._one(full)  # paragrafo desconhecido: traduz inteiro em segundo plano
+        # traducao igual ao original nao precisa de caixa por cima
+        return [o for o in out if o["pt"].strip() != o["en"].strip()]
+
+    @staticmethod
+    def _card_titles(lines):
+        """Linhas que sao titulo de card de skill/item: logo acima vem uma linha de atributo que comeca
+        com numero ("Hemorrhage" em cima de "145 damage · 7.7s"). O titulo e nome proprio, mesmo quando
+        e uma palavra inglesa comum - entao fica em ingles."""
+        out = set()
+        for t in lines:
+            words = t["text"].split()
+            if not words or t["text"].isupper() or not all(w[:1].isupper() for w in words if w[:1].isalpha()):
+                continue
+            for m in lines:
+                toks = m["text"].split()
+                if m is t or not toks or not (re.match(r"[+\-]?\d", toks[0]) and is_value_token(toks[0])):
+                    continue
+                if 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.6 and abs(m["x"] - t["x"]) < t["h"] * 2.5:
+                    out.add(id(t))
+                    break
+        return out
+
+    def _label_row(self, ln, box, lines):
+        """Fileira de rotulos que o OCR leu como uma linha so ("PROFESSIONS CLASSES PARTY", as abas do
+        topo): se cada palavra e um rotulo conhecido, cada uma ganha sua caixa. Sem isso, a frase inteira
+        ia para a traducao automatica e saia "CLASSES DE PROFISSOES GRUPO"."""
+        words = ln.get("words")
+        if not words or len(words) < 2 or [w["text"] for w in words] != ln["text"].split():
+            return []
+        # rotulos separados tem vao grande entre eles; numa frase ("Max level") o vao e de um espaco
+        gaps = [b["x"] - (a["x"] + a["w"]) for a, b in zip(words, words[1:])]
+        if min(gaps) < ln["h"] * 1.2:
+            return []
+        hits = [self.lib.lookup(w["text"], 100) if not is_value_token(w["text"]) else None for w in words]
+        if sum(1 for h in hits if h) < 2 or any(h is None and not is_value_token(w["text"])
+                                                 for h, w in zip(hits, words)):
+            return []
+        out = []
+        for i, (w, hit) in enumerate(zip(words, hits)):
+            if not hit or hit[0] == w["text"]:
+                continue
+            d = box(w, ln, hit[0], hit[1], w["text"], "center", 1)
+            d["ref"] = (w["text"], w["w"])
+            d["room_l"] = w["x"] - (words[i - 1]["x"] + words[i - 1]["w"]) if i > 0 else ln.get("room_l", 0)
+            d["room_r"] = (words[i + 1]["x"] - (w["x"] + w["w"])) if i + 1 < len(words) else ln.get("room_r", 0)
+            out.append(d)
+        return out
+
+    @staticmethod
+    def _span_boxes(ln, r, box):
+        """Linha montada por partes: caixas so em cima dos trechos traduzidos.
+
+        Cada trecho absorve os vizinhos que podem ser redesenhados sem risco - separador (· • - /),
+        tecla (Q, E, R) e numero inteiro - e trechos separados so por eles viram uma caixa so:
+        "530 damage · full signature" -> uma caixa "530 dano · signature completa".
+        Valores como "8.6s" e nomes ficam com os pixels do jogo (o OCR pode ter lido "8.65").
+        None se nao der para saber onde fica cada palavra.
+        """
+        words = ln.get("words")
+        toks = ln["text"].split()
+        if not words or [w["text"] for w in words] != toks:
+            return None
+
+        def safe(t):
+            return t in ("•", "·", "|", "-", "/") or (len(t) == 1 and t.isupper()) or bool(
+                re.fullmatch(r"[+\-]?\d+%?", t))
+
+        repl = {}  # primeira palavra do trecho -> (fim, traducao, origem)
+        for i, j, pt, origin in r[2]:
+            repl[i] = (j, pt, origin)
+        groups, k = [], 0
+        starts = sorted(repl)
+        used = set()
+        for st in starts:
+            if st in used:
+                continue
+            gi = st
+            while gi > 0 and safe(toks[gi - 1]) and not any(gi - 1 in range(a, repl[a][0]) for a in repl):
+                gi -= 1
+            gj, origins = repl[st][0], {repl[st][2]}
+            used.add(st)
+            while gj < len(toks):
+                if gj in repl:
+                    origins.add(repl[gj][2])
+                    used.add(gj)
+                    gj = repl[gj][0]
+                elif safe(toks[gj]):
+                    gj += 1
+                else:
+                    break
+            # separador solto na ponta nao precisa ser coberto
+            while gj > gi and toks[gj - 1] in ("•", "·", "|", "-", "/") and gj - 1 not in repl:
+                gj -= 1
+            groups.append((gi, gj, "auto" if "auto" in origins else "manual"))
+        out = []
+        for gi, gj, origin in groups:
+            pieces, t = [], gi
+            while t < gj:
+                if t in repl:
+                    pieces.append(repl[t][1])
+                    t = repl[t][0]
+                else:
+                    pieces.append(toks[t])
+                    t += 1
+            ws = words[gi:gj]
+            x = ws[0]["x"]
+            geo = {"x": x, "y": ln["y"], "w": ws[-1]["x"] + ws[-1]["w"] - x, "h": ln["h"]}
+            d = box(geo, ln, " ".join(pieces), origin, " ".join(toks[gi:gj]), "left", 1)
+            d["ref"] = (ln["text"], ln["w"])  # a fonte e medida na linha inteira (mesma fonte)
+            # espaco ate a proxima palavra (que continua aparecendo); no fim, o espaco livre da linha
+            d["room_r"] = (words[gj]["x"] - (geo["x"] + geo["w"]) if gj < len(words) else ln.get("room_r", 0))
+            d["room_l"] = (x - (words[gi - 1]["x"] + words[gi - 1]["w"]) if gi > 0 else ln.get("room_l", 0))
+            d["inline"] = True
+            out.append(d)
         return out

@@ -27,6 +27,9 @@ _VALUE_RE = re.compile(r"""^(
 )$""", re.X | re.I)
 
 
+_OCR_DIGITS = str.maketrans({"g": "9", "O": "0", "o": "0", "l": "1", "I": "1", "S": "5", "B": "8", "Z": "2"})
+
+
 def is_value_token(tok):
     """Pedaco que nao se traduz: numero, porcentagem, intervalo, tempo, nivel, tecla (Q, E, R)."""
     t = tok.strip()
@@ -34,7 +37,17 @@ def is_value_token(tok):
         return True
     if len(t) == 1 and t.isupper():
         return True  # tecla de atalho
-    return bool(_VALUE_RE.match(t))
+    if t in ("s", "m", "h", "d", "x", "%"):
+        return True  # unidade que o OCR separou do numero ("7.7 s")
+    t = t.rstrip(".,„…·'\"")  # reticencias lidas errado pelo OCR ("32.„")
+    if not t:
+        return True
+    if _VALUE_RE.match(t):
+        return True
+    # numero com letra trocada pelo OCR ("g.6s" = 9.6s/8.6s, "1O" = 10): ainda e valor (e nunca e redesenhado)
+    if re.search(r"\d", t):
+        return bool(_VALUE_RE.match(t.translate(_OCR_DIGITS)))
+    return False
 
 
 def only_values(text):

@@ -24,6 +24,15 @@ from style import (DESCENDERS, _rgb, add_colors, avail_width, font_px, init_face
 KEY_COLOR = "#ff00fe"  # cor "invisivel" do overlay
 
 
+def _overlap(a, b):
+    """As duas caixas ocupam (quase) o mesmo lugar? (mais de 30% da menor)"""
+    ix = min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"])
+    iy = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
+    if ix <= 0 or iy <= 0:
+        return False
+    return ix * iy > 0.3 * min(a["w"] * a["h"], b["w"] * b["h"])
+
+
 def log_error():
     with open(ERROR_LOG, "a", encoding="utf-8") as f:
         f.write(time.strftime("\n[%Y-%m-%d %H:%M:%S]\n") + traceback.format_exc())
@@ -41,6 +50,7 @@ class App:
         self.last_lines = []
         self.last_boxes = []
         self.drawn_sig = None
+        self._scale, self._scale_for = 1.6, None  # escala do OCR (ver ocr_scale)
         self.mt = None
         self.ocr = None
         self.ocr_error = None
@@ -109,7 +119,7 @@ class App:
     # ---------- janela ----------
     def _build_window(self):
         root, cfg = self.root, self.cfg
-        W = 440
+        W = T.S(440)
         panel = tk.Frame(root, bg=T.PANEL, width=W)
         panel.pack(fill="both", expand=True, padx=1, pady=1)
 
@@ -117,52 +127,52 @@ class App:
         try:
             from PIL import Image, ImageTk
             logo = Image.open(config.LOGO_FILE).convert("RGBA")
-            logo.thumbnail((250, 96), Image.LANCZOS)
+            logo.thumbnail((T.S(250), T.S(96)), Image.LANCZOS)
             self._logo = ImageTk.PhotoImage(logo)  # guarda a referencia, senao o tkinter descarta a imagem
-            tk.Label(panel, image=self._logo, bg=T.PANEL, bd=0).pack(pady=(14, 0))
+            tk.Label(panel, image=self._logo, bg=T.PANEL, bd=0).pack(pady=(T.S(14), T.S(0)))
             title = "TRADUTOR"
         except Exception:
             title = None  # sem o arquivo do logo: o nome vai escrito no titulo
-            tk.Label(panel, text=APP_NAME, font=T.font("title"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(14, 0))
+            tk.Label(panel, text=APP_NAME, font=T.font("title"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(14), T.S(0)))
         if title:
-            tk.Label(panel, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(2, 0))
+            tk.Label(panel, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(2), T.S(0)))
         tk.Label(panel, text="As telas do jogo em português do Brasil", font=T.font("caption"),
                  fg=T.MUTED, bg=T.PANEL).pack()
         tk.Label(panel, text=f"v{config.APP_VERSION}", font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL).place(
             relx=1.0, x=-14, y=10, anchor="ne")
-        T.gold_divider(panel).pack(fill="x", padx=16, pady=(10, 12))
+        T.gold_divider(panel).pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(12)))
 
         # estado: o que o tradutor esta fazendo agora, em uma frase
         outer, box = T.card(panel)
-        outer.pack(fill="x", padx=16)
+        outer.pack(fill="x", padx=T.S(16))
         line = tk.Frame(box, bg=T.CARD)
-        line.pack(fill="x", padx=12, pady=(12, 0))
-        self.state_dot = tk.Canvas(line, width=12, height=12, bg=T.CARD, highlightthickness=0, bd=0)
-        self.state_dot.pack(side="left", padx=(0, 8))
-        self._state_oval = self.state_dot.create_oval(1, 1, 11, 11, fill=T.DISABLED, outline="")
+        line.pack(fill="x", padx=T.S(12), pady=(T.S(12), T.S(0)))
+        self.state_dot = tk.Canvas(line, width=T.S(12), height=T.S(12), bg=T.CARD, highlightthickness=0, bd=0)
+        self.state_dot.pack(side="left", padx=(T.S(0), T.S(8)))
+        self._state_oval = self.state_dot.create_oval(T.S(1), T.S(1), T.S(11), T.S(11), fill=T.DISABLED, outline="")
         self.lbl_state = tk.Label(line, text="Iniciando...", font=T.font("label"), fg=T.TEXT_STRONG, bg=T.CARD)
         self.lbl_state.pack(side="left")
         self.lbl_hint = tk.Label(box, text="", font=T.font("body"), fg=T.MUTED, bg=T.CARD, anchor="w",
-                                 justify="left", wraplength=W - 60)
-        self.lbl_hint.pack(fill="x", padx=12, pady=(4, 12))
+                                 justify="left", wraplength=W - T.S(60))
+        self.lbl_hint.pack(fill="x", padx=T.S(12), pady=(T.S(4), T.S(12)))
 
         self.btn_toggle = T.RButton(panel, f"Desligar ({cfg['atalho_liga_desliga']})", self.toggle,
                                     kind="secondary", height=42)
-        self.btn_toggle.pack(fill="x", padx=16, pady=(10, 12))
+        self.btn_toggle.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(12)))
 
         # o que o tradutor precisa para funcionar; cada linha diz o que falta e resolve com um botao
         outer, box = T.card(panel, "Preparação")
-        outer.pack(fill="x", padx=16)
+        outer.pack(fill="x", padx=T.S(16))
         self.row_ocr = T.StatusRow(box, "Leitor de tela")
         self.row_mt = T.StatusRow(box, "Tradutor offline")
         self.row_lib = T.StatusRow(box, "Biblioteca")
         self.row_game = T.StatusRow(box, "Hytale")
         for r in (self.row_ocr, self.row_mt, self.row_lib, self.row_game):
-            r.pack(fill="x", pady=3)
-        tk.Frame(box, bg=T.CARD, height=8).pack()
+            r.pack(fill="x", pady=T.S(3))
+        tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
 
         outer, box = T.card(panel, "Opções")
-        outer.pack(fill="x", padx=16, pady=(12, 0))
+        outer.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(0)))
         can_auto = self.w.autostart_command() is not None
         self.tg_auto = self._option(box, "Abrir junto com o Windows",
                                     self.w.autostart_enabled() if can_auto else False, self.set_autostart)
@@ -170,34 +180,34 @@ class App:
             self.tg_auto.set(enabled=False)  # so existe no programa instalado
         self.tg_online = self._option(box, "Buscar traduções novas na internet",
                                       cfg["atualizar_pela_internet"], self.set_online)
-        tk.Frame(box, bg=T.CARD, height=8).pack()
+        tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
 
         # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
         self.btn_check = T.RButton(panel, "Verificar atualizações", self.check_updates, kind="secondary", height=38)
-        self.btn_check.pack(fill="x", padx=16, pady=(12, 0))
+        self.btn_check.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(0)))
 
         self.lbl_info = tk.Label(panel, text="", font=T.font("body"), fg=T.TEXT, bg=T.PANEL, anchor="w",
-                                 justify="left", wraplength=W - 34)
-        self.lbl_info.pack(fill="x", padx=16, pady=(10, 0))
+                                 justify="left", wraplength=W - T.S(34))
+        self.lbl_info.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(0)))
 
         # aviso de versao nova (so aparece quando existe)
         self.update_box = tk.Frame(panel, bg=T.GOLD)
         inner = tk.Frame(self.update_box, bg=T.CARD)
         inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.lbl_update = tk.Label(inner, text="", font=T.font("label"), fg=T.GOLD_HI, bg=T.CARD)
-        self.lbl_update.pack(side="left", padx=12, pady=8)
+        self.lbl_update.pack(side="left", padx=T.S(12), pady=T.S(8))
         b = T.RButton(inner, "Baixar", self.open_download, kind="primary", height=30, bg=T.CARD, small=True)
-        b.config(width=90)
-        b.pack(side="right", padx=10, pady=6)
+        b.config(width=T.S(90))
+        b.pack(side="right", padx=T.S(10), pady=T.S(6))
         self.footer = tk.Label(
             panel, font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL, justify="left", anchor="w",
             text=f"{cfg['atalho_liga_desliga']} liga/desliga  •  {cfg['atalho_esconder']} mostra o original  •  "
                  f"{cfg['atalho_salvar_tela']} salva a tela em texto")
-        self.footer.pack(fill="x", padx=16, pady=(10, 14))
+        self.footer.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(14)))
 
     def _option(self, parent, text, value, command):
         row = tk.Frame(parent, bg=T.CARD)
-        row.pack(fill="x", padx=12, pady=4)
+        row.pack(fill="x", padx=T.S(12), pady=T.S(4))
         tk.Label(row, text=text, font=T.font("body"), fg=T.TEXT, bg=T.CARD).pack(side="left")
         tg = T.Toggle(row, value, command)
         tg.pack(side="right")
@@ -414,6 +424,7 @@ class App:
         removed = False      # tirou traducao da tela e ainda nao releu (ai a pressa e maior)
         shown = []           # [(caixa, miniatura da regiao)] do que esta desenhado agora
         last_rect = None
+        ocr_pass = 0
         while True:
             time.sleep(TICK)
             try:
@@ -492,18 +503,48 @@ class App:
                 if urgent_since is None and screen_diff(sig, ocr_sig) == 0 and self.last_lines:
                     boxes = self.translator.boxes(self.last_lines)  # pega traducoes que acabaram de ficar prontas
                 else:
-                    lines = tidy_lines(self.ocr.recognize(img, self.cfg["escala_ocr"]))
+                    # escala alternada: cada escala acha textos que a outra perde; somando as leituras
+                    # (as traducoes ficam enquanto a regiao nao muda) a tela converge para o que as duas acham
+                    ocr_pass += 1
+                    lines = tidy_lines(self.ocr.recognize(img, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0)))
+                    self.learn_text_size(lines, w, h)
                     if self.cfg["usar_cores_da_tela"]:
                         add_colors(img, lines)
                     self.last_lines = lines
                     boxes = self.translator.boxes(lines)
                     ocr_sig = sig
                 last_ocr, urgent_since, removed = now, None, False
-                shown = [(b, region_thumb(img, b["x"], b["y"], b["w"], b["h"])) for b in boxes]
-                self.ui_q.put(("boxes", rect, boxes))
+                fresh = [(b, region_thumb(img, b["x"], b["y"], b["w"], b["h"])) for b in boxes]
+                # traducao da leitura anterior que esta leitura nao achou, mas cuja regiao nao mudou:
+                # o texto continua la (o OCR e que oscila) -> continua na tela
+                kept = [(b, t) for b, t in shown
+                        if self.capture_safe and not region_changed(img, t)
+                        and not any(_overlap(b, nb) for nb, _ in fresh)]
+                shown = fresh + kept
+                self.ui_q.put(("boxes", rect, [b for b, _ in shown]))
             except Exception:
                 log_error()
                 time.sleep(2)
+
+    # ---------- resolucao ----------
+    def ocr_scale(self, w, h):
+        """Escala do OCR: fixa no config.json, ou "auto" (acompanha a altura do texto da tela)."""
+        fixed = self.cfg.get("escala_ocr", "auto")
+        if isinstance(fixed, (int, float)) and not isinstance(fixed, bool):
+            return float(fixed)
+        if self._scale_for != (w, h):  # janela mudou de tamanho: recomeca pela estimativa
+            from ocr_engine import initial_scale
+            self._scale, self._scale_for = initial_scale(h), (w, h)
+        return self._scale
+
+    def learn_text_size(self, lines, w, h):
+        """Depois de cada leitura, ajusta a escala pela altura mediana do texto (suave, sem pular)."""
+        if len(lines) < 4 or self.cfg.get("escala_ocr", "auto") != "auto":
+            return
+        from ocr_engine import auto_scale
+        hs = sorted(l["h"] for l in lines)
+        want = auto_scale(hs[len(hs) // 2], w, h)
+        self._scale = round(self._scale * 0.6 + want * 0.4, 2)
 
     # ---------- thread da interface ----------
     def pump(self):
@@ -537,7 +578,7 @@ class App:
                     self.btn_check.set(text="Verificar atualizações", enabled=True)
                 elif kind == "update":
                     self.lbl_update.config(text=f"Versão {msg[1]} disponível")
-                    self.update_box.pack(fill="x", padx=16, pady=(10, 0), before=self.footer)
+                    self.update_box.pack(fill="x", padx=T.S(16), pady=(T.S(10), 0), before=self.footer)
         except queue.Empty:
             pass
         self.root.after(40, self.pump)
@@ -632,11 +673,14 @@ class App:
                 # assim nao couber E houver espaco para quebrar (nunca no meio de uma palavra).
                 if width_of(px, track) > avail:
                     track = max(0, min(track, (avail - width_of(px, 0)) / n_gaps)) if n_gaps else 0
-                floor = max(min_px, int(px * 0.7))
+                floor = max(min_px, int(round(px * 0.8)))  # menor que 80% fica ilegivel: melhor o original
                 while px > floor and width_of(px, track) > avail:
                     px -= 1
-                if width_of(px, track) > avail and " " in b["pt"]:
-                    wrap, track = avail, 0
+                if width_of(px, track) > avail:
+                    if len(b["en"].split()) >= 5 and " " in b["pt"] and not b.get("inline"):
+                        wrap, track = avail, 0  # frase: pode quebrar em duas linhas
+                    elif width_of(px, track) > avail * 1.08:
+                        continue  # rotulo curto que nao cabe nem com a letra menor: fica o original
             else:
                 wrap = avail
             ax, anchor = {"center": (b["x"] + b["w"] / 2, "n"), "right": (b["x"] + b["w"], "ne")}.get(

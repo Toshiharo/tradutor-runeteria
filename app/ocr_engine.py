@@ -11,6 +11,21 @@ class OcrUnavailable(Exception):
     pass
 
 
+TARGET_TEXT_PX = 15.5  # altura do texto que o OCR do Windows le melhor (depois de ampliar)
+
+
+def auto_scale(text_h, width, height):
+    """Escala do OCR para a altura do texto desta tela: texto de 6 px (1280x720) e ampliado ~2,5x;
+    em 4K o texto ja e grande e a imagem e lida quase sem ampliar (3x mais rapido)."""
+    low = 0.75 if width * height > 4_000_000 else 1.0
+    return max(low, min(3.0, TARGET_TEXT_PX / max(text_h, 1.0)))
+
+
+def initial_scale(height):
+    """Antes da primeira leitura: estimativa pela altura da janela (em 1080p o texto tem ~9 px)."""
+    return auto_scale(9.0 * height / 1009.0, 1, 1)
+
+
 class WindowsOcr:
     def __init__(self, lang="en-US"):
         try:
@@ -58,7 +73,8 @@ class WindowsOcr:
         """Devolve lista de linhas: {'text', 'x','y','w','h'} em pixels da imagem ORIGINAL."""
         scale = min(scale, self.max_dim / max(img.width, img.height, 1))  # o Windows recusa imagem grande demais
         if scale != 1.0:
-            img = img.resize((int(img.width * scale), int(img.height * scale)), Image.BICUBIC)
+            # LANCZOS le melhor texto pequeno ampliado que BICUBIC (testado em 1280x720: 60% -> 68-75%)
+            img = img.resize((int(img.width * scale), int(img.height * scale)), Image.LANCZOS)
         img = img.convert("RGBA")
         w, h = img.size
         writer = self._DataWriter()

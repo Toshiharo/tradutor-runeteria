@@ -77,6 +77,24 @@ por marcador e `_agree` acerta artigo/possessivo). Ao mudar um termo, mude na bi
 Profissões/bancadas traduzidas nos textos de maestria (Sawmill→Serraria, Tannery→Curtume, Loom→Tear, Smelter→Fundição).
 Labels com `RenderUppercase` aparecem em MAIÚSCULAS no OCR — a biblioteca compara sem diferenciar caixa.
 
+## Resoluções e escala do Windows
+Nada pode depender de 1920x1080. Medido com capturas redimensionadas (1280 a 3840): o overlay mantém altura x1,00,
+largura x1,00 e desvio 0 px. Regras: `escala_ocr: "auto"` (`ocr_engine.auto_scale`: alvo ~15,5 px de texto depois de
+ampliar, LANCZOS, 1x–3x; 0,75x em 4K) ajustada a cada leitura pela altura mediana do texto (`main.learn_text_size`);
+leituras alternam escala x1/x1,2 e traduções ficam enquanto a região não muda (o OCR oscila entre escalas).
+Distâncias em pixels são proporcionais à altura do texto (`style.free_room`, `guess_align`, `avail_width`).
+Fonte do overlay nunca abaixo de 80% do original: se não cabe, fica o texto original (ilegível é pior que inglês).
+Janela do tradutor: `theme.S()` aplica a escala do Windows (125%/150%), limitada à área útil da tela
+(`RT_UI_SCALE` força um valor para teste). Monitor à esquerda (coordenadas negativas) funciona no tk e no mss.
+
+## Linhas de tooltip/habilidade
+`compose` devolve os trechos traduzidos por palavra; `Translator._span_boxes` cobre só esses trechos (mais separador,
+tecla e número inteiro vizinhos: "530 dano · signature completa"). Valores com letra ("8.6s") e nomes ficam com os
+pixels do jogo — o OCR erra esses ("8.65", "g.6s"). Título e subtítulo de card com cor diferente não viram parágrafo.
+Título de card logo acima de linha que começa com número (`Translator._card_titles`) é nome de skill/item: fica em
+inglês mesmo sendo palavra comum ("Hemorrhage"). Fileira de rótulos com vão grande entre eles (abas do topo que o OCR
+juntou) vira uma caixa por rótulo (`_label_row`), nunca vai para a tradução automática. Memória automática `"v": 3`.
+
 ## Usuário final é leigo
 Quem usa não é técnico: instalar e usar tem que ser quase um clique. Nada de pedir PowerShell, editar JSON ou ler log
 para o fluxo normal. Cada problema aparece na janela em linguagem simples, com um botão que resolve
