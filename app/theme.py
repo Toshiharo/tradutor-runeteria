@@ -47,25 +47,27 @@ def scale():
                 v = ctypes.windll.user32.GetDpiForSystem() / 96.0
             except Exception:
                 v = 1.0
-        # a janela tem ~830 px de altura em 100%: nunca maior que a area util da tela
-        # (notebook 1080p em 150% ou tela de 1366x768 cortariam a janela)
-        work = _work_area_height()
+        # a janela tem ~800x620 px em 100% (com um aviso no Funcionamento): nunca maior que a area util da tela
+        # (notebook 1080p em 150% ou tela de 1280x720 cortariam a janela)
+        work_w, work = _work_area()
         if work:
-            v = min(v, work * 0.92 / 830.0)
+            v = min(v, work * 0.92 / 620.0)
+        if work_w:
+            v = min(v, work_w * 0.95 / 800.0)
         _SCALE = max(0.75, min(v, 3.0))
     return _SCALE
 
 
-def _work_area_height():
-    """Altura da area util da tela principal (sem a barra de tarefas), em pixels; 0 se nao souber."""
+def _work_area():
+    """(largura, altura) da area util da tela principal (sem a barra de tarefas), em pixels; 0 se nao souber."""
     try:
         from ctypes import wintypes
         r = wintypes.RECT()
         if ctypes.windll.user32.SystemParametersInfoW(0x0030, 0, ctypes.byref(r), 0):  # SPI_GETWORKAREA
-            return r.bottom - r.top
+            return r.right - r.left, r.bottom - r.top
     except Exception:
         pass
-    return 0
+    return 0, 0
 
 
 def S(v):
@@ -100,6 +102,7 @@ def font(role):
         "title": ("Cormorant", 26, "bold"),          # titulo in-game
         "heading": ("Lexend SemiBold", 12, "normal"),  # titulo de secao (MAIUSCULAS)
         "button": ("Lexend SemiBold", 14, "normal"),
+        "state": ("Inter SemiBold", 17, "normal"),     # frase de estado da janela (o que esta acontecendo)
         "label": ("Inter SemiBold", 14, "normal"),
         "body": ("Inter", 13, "normal"),
         "caption": ("Lexend", 12, "normal"),
@@ -250,6 +253,7 @@ class StatusRow(tk.Frame):
         self.button = None
 
     def set(self, state, text):
+        self.state = state
         self.dot.itemconfig(self._oval, fill=self.COLORS[state])
         self.value.config(text=text)
 

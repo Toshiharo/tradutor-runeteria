@@ -74,20 +74,61 @@ RUN_NAME = "TradutorRuneteria"
 
 
 def autostart_command():
-    """Comando gravado no registro; None quando rodando pelo codigo-fonte (so faz sentido no .exe)."""
+    """Comando gravado no registro; None quando rodando pelo codigo-fonte (so faz sentido no .exe).
+    "--com-o-jogo": o tradutor abre escondido quando o Windows liga, fica esperando o Hytale (sem carregar
+    nada) e so aparece e carrega quando o jogo abre."""
     import sys
     if not getattr(sys, "frozen", False):
         return None
-    return f'"{sys.executable}" --minimizado'
+    return f'"{sys.executable}" --com-o-jogo'
 
 
-def autostart_enabled():
+def _autostart_value():
     import winreg
     try:
         with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
-            return winreg.QueryValueEx(k, RUN_NAME)[0] == autostart_command()
+            return winreg.QueryValueEx(k, RUN_NAME)[0]
     except OSError:
+        return None
+
+
+def autostart_enabled():
+    cmd = autostart_command()
+    value = _autostart_value()
+    # "--minimizado" e o valor antigo ("Abrir junto com o Windows", ate a 1.1.5): conta como ligado
+    return bool(cmd and value) and value.split(" --")[0] == cmd.split(" --")[0]
+
+
+def migrate_autostart():
+    """Quem ligou "Abrir junto com o Windows" passa para "junto com o jogo" (mesmo registro, outro modo)."""
+    value = _autostart_value()
+    if value and value != autostart_command() and autostart_enabled():
+        set_autostart(True)
+
+
+_show_event = None
+
+
+def show_signal(create):
+    """Aviso entre a copia aberta e uma segunda copia: a segunda pede para a primeira aparecer (ela pode estar
+    escondida, esperando o jogo) em vez de mostrar "ja esta aberto". create=True na primeira copia."""
+    global _show_event
+    k32 = ctypes.windll.kernel32
+    name = "RuneteriaTradutor.mostrar"
+    if create:
+        _show_event = k32.CreateEventW(None, False, False, name)
+        return bool(_show_event)
+    h = k32.OpenEventW(0x0002, False, name)  # EVENT_MODIFY_STATE
+    if not h:
         return False
+    ok = bool(k32.SetEvent(h))
+    k32.CloseHandle(h)
+    return ok
+
+
+def show_requested():
+    """A segunda copia pediu para aparecer? (nao espera nada)"""
+    return bool(_show_event) and ctypes.windll.kernel32.WaitForSingleObject(_show_event, 0) == 0
 
 
 def set_autostart(on):

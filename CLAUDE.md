@@ -186,7 +186,13 @@ dourado primary como único destaque, cantos de 4–6 px, filete dourado com los
 Fontes em `app/fonts` (OFL, carregadas só para o processo): Cormorant (título), Lexend (botões/rótulos), Inter (texto).
 Sem emoji. Marca: logos oficiais do Runeteria em `app/assets` (logo completo no cabeçalho, "R" dourado no ícone);
 `tools/gerar_icone.py <pasta dos logos>` regenera `icone.ico` e as imagens. Não usar cores fora dos tokens.
-`main._build_window` monta a janela; `refresh_status` decide a frase de estado e as linhas de "Preparação".
+`main._build_window` monta a janela (vertical); `refresh_status` decide a frase de estado e o cartão
+"Funcionamento": com tudo certo, uma linha "Tudo funcionando"; senão só o item que falha, com o motivo em linguagem
+simples e o botão que resolve (`relayout_health`). Cartão "Dicas": missões leem melhor na tela /quests que na lista
+fixada (que fica sobre o cenário 3D). "Abrir junto com o jogo" (1.1.6, substitui "com o Windows"): registro Run com
+`--com-o-jogo`; o app abre escondido, sem carregar nada, e aparece minimizado e carrega quando o Hytale abre
+(`watch_game`); o valor antigo `--minimizado` é migrado. Segunda cópia pede à primeira para aparecer
+(`winutil.show_signal`, evento nomeado) em vez de "já está aberto".
 Só um botão de ação além de Ligar/Desligar: "Verificar atualizações" (`main.check_updates`: recarrega correções do
 usuário, baixa biblioteca/glossário do GitHub, avisa de versão nova, procura telas novas no cache). Não adicionar
 botões técnicos (pasta, recarregar, telas novas): o usuário é leigo.

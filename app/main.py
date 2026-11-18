@@ -95,7 +95,10 @@ class App:
         self.game_state = (None, False, False, False)  # (descricao do servidor, ativo, janela achada, no Runeteria)
         self.new_version = None
         self._build_window()
-        if "--minimizado" in sys.argv:
+        self.waiting_game = "--com-o-jogo" in sys.argv
+        if self.waiting_game:
+            self.root.withdraw()  # nem janela nem barra de tarefas: aparece quando o Hytale abrir
+        elif "--minimizado" in sys.argv:
             self.root.iconify()
 
         # ---- overlay ----
@@ -130,7 +133,14 @@ class App:
 
         self.refresh_lib_label()
         self.refresh_status()
-        threading.Thread(target=self.load_models, daemon=True).start()
+        try:
+            winutil.migrate_autostart()
+        except Exception:
+            log_error()
+        winutil.show_signal(create=True)
+        self._models_started = False
+        if not self.waiting_game:
+            self.start_models()
         threading.Thread(target=self.worker, daemon=True).start()
         if self.cfg["atualizar_pela_internet"] and config.FROZEN:  # pelo codigo-fonte vale o arquivo local
             threading.Thread(target=self.online_check, daemon=True).start()
@@ -139,66 +149,113 @@ class App:
     # ---------- janela ----------
     def _build_window(self):
         root, cfg = self.root, self.cfg
-        W = T.S(440)
-        panel = tk.Frame(root, bg=T.PANEL, width=W)
+        C = T.S(375)  # largura de cada coluna: a janela e um retangulo de duas colunas, nao uma coluna comprida
+        W = C           # (wraplength dos textos e por coluna)
+        panel = tk.Frame(root, bg=T.PANEL)
         panel.pack(fill="both", expand=True, padx=1, pady=1)
 
-        # cabecalho: logo oficial do Runeteria + "TRADUTOR" + filete com losango
+        # cabecalho numa faixa so: logo a esquerda, nome e frase ao lado, versao no canto
+        head = tk.Frame(panel, bg=T.PANEL)
+        head.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(0)))
         try:
             from PIL import Image, ImageTk
             logo = Image.open(config.LOGO_FILE).convert("RGBA")
-            logo.thumbnail((T.S(250), T.S(96)), Image.LANCZOS)
+            logo.thumbnail((T.S(170), T.S(64)), Image.LANCZOS)
             self._logo = ImageTk.PhotoImage(logo)  # guarda a referencia, senao o tkinter descarta a imagem
-            tk.Label(panel, image=self._logo, bg=T.PANEL, bd=0).pack(pady=(T.S(14), T.S(0)))
+            tk.Label(head, image=self._logo, bg=T.PANEL, bd=0).pack(side="left")
             title = "TRADUTOR"
         except Exception:
-            title = None  # sem o arquivo do logo: o nome vai escrito no titulo
-            tk.Label(panel, text=APP_NAME, font=T.font("title"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(14), T.S(0)))
-        if title:
-            tk.Label(panel, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(2), T.S(0)))
-        tk.Label(panel, text="As telas do jogo em português do Brasil", font=T.font("caption"),
-                 fg=T.MUTED, bg=T.PANEL).pack()
-        if config.APP_STAGE:
-            tk.Label(panel, text="Versão de testes: algumas traduções ainda podem sair erradas",
-                     font=T.font("caption"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(2), 0))
+            title = APP_NAME.upper()  # sem o arquivo do logo: o nome vai escrito
+        names = tk.Frame(head, bg=T.PANEL)
+        names.pack(side="left", padx=(T.S(14), 0))
+        tk.Label(names, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL, anchor="w").pack(fill="x")
+        tk.Label(names, text="As telas do jogo em português do Brasil", font=T.font("caption"),
+                 fg=T.MUTED, bg=T.PANEL, anchor="w").pack(fill="x")
         stage = f" {config.APP_STAGE.upper()}" if config.APP_STAGE else ""
-        tk.Label(panel, text=f"v{config.APP_VERSION}{stage}", font=T.font("caption"), fg=T.DISABLED,
-                 bg=T.PANEL).place(relx=1.0, x=-14, y=10, anchor="ne")
+        tk.Label(head, text=f"v{config.APP_VERSION}{stage}", font=T.font("caption"), fg=T.DISABLED,
+                 bg=T.PANEL).pack(side="right", anchor="n")
         T.gold_divider(panel).pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(12)))
 
-        # estado: o que o tradutor esta fazendo agora, em uma frase
-        outer, box = T.card(panel)
-        outer.pack(fill="x", padx=T.S(16))
+        # duas colunas iguais em duas faixas: cada cartao da esquerda tem a mesma altura e o mesmo topo do cartao
+        # ao lado (grid com uniform), entao as bordas se alinham em vez de cada coluna descer num ritmo
+        cols = tk.Frame(panel, bg=T.PANEL)
+        cols.pack(fill="both", expand=True, padx=T.S(16))
+        cols.grid_columnconfigure(0, weight=1, uniform="col", minsize=C)
+        cols.grid_columnconfigure(1, weight=1, uniform="col", minsize=C)
+        gap = T.S(12)
+
+        # ---- faixa de cima: o estado (com o botao que liga/desliga) e as dicas ----
+        outer, box = T.card(cols)
+        outer.grid(row=0, column=0, sticky="nsew", padx=(0, gap // 2), pady=(0, gap))
         line = tk.Frame(box, bg=T.CARD)
-        line.pack(fill="x", padx=T.S(12), pady=(T.S(12), T.S(0)))
+        line.pack(fill="x", padx=T.S(14), pady=(T.S(14), T.S(0)))
         self.state_dot = tk.Canvas(line, width=T.S(12), height=T.S(12), bg=T.CARD, highlightthickness=0, bd=0)
-        self.state_dot.pack(side="left", padx=(T.S(0), T.S(8)))
+        self.state_dot.pack(side="left", padx=(T.S(0), T.S(10)))
         self._state_oval = self.state_dot.create_oval(T.S(1), T.S(1), T.S(11), T.S(11), fill=T.DISABLED, outline="")
-        self.lbl_state = tk.Label(line, text="Iniciando...", font=T.font("label"), fg=T.TEXT_STRONG, bg=T.CARD)
+        self.lbl_state = tk.Label(line, text="Iniciando...", font=T.font("state"), fg=T.TEXT_STRONG, bg=T.CARD)
         self.lbl_state.pack(side="left")
-        self.lbl_hint = tk.Label(box, text="", font=T.font("body"), fg=T.MUTED, bg=T.CARD, anchor="w",
-                                 justify="left", wraplength=W - T.S(60))
-        self.lbl_hint.pack(fill="x", padx=T.S(12), pady=(T.S(4), T.S(12)))
+        # o botao fica no pe do cartao, junto do estado que ele muda; a frase ocupa o meio
+        self.btn_toggle = T.RButton(box, f"Desligar ({cfg['atalho_liga_desliga']})", self.toggle,
+                                    kind="secondary", height=42, bg=T.CARD)
+        self.btn_toggle.pack(side="bottom", fill="x", padx=T.S(14), pady=(T.S(10), T.S(14)))
+        self.lbl_hint = tk.Label(box, text="", font=T.font("body"), fg=T.MUTED, bg=T.CARD, anchor="nw",
+                                 justify="left", wraplength=W - T.S(52))
+        self.lbl_hint.pack(fill="both", expand=True, padx=(T.S(36), T.S(14)), pady=(T.S(4), T.S(0)))
 
-        self.btn_toggle = T.RButton(panel, f"Desligar ({cfg['atalho_liga_desliga']})", self.toggle,
-                                    kind="secondary", height=42)
-        self.btn_toggle.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(12)))
+        # dicas: o unico cartao com borda e texto dourados (pedido do dono: cor diferente dos outros)
+        outer = tk.Frame(cols, bg=T.GOLD_STRONG)
+        outer.grid(row=0, column=1, sticky="nsew", padx=(gap // 2, 0), pady=(0, gap))
+        box = tk.Frame(outer, bg=T.CARD)
+        box.pack(fill="both", expand=True, padx=1, pady=1)
+        tk.Label(box, text="DICAS", font=T.font("heading"), fg=T.GOLD_HI, bg=T.CARD, anchor="w").pack(
+            fill="x", padx=T.S(14), pady=(T.S(12), T.S(4)))
+        tips = [("Missões", "Abra a tela de missões (/quests) para ler a tradução. A lista no canto da tela "
+                            "sai com mais erros.")]
+        if config.APP_STAGE:
+            tips.append(("Versão de testes", "Algumas traduções podem sair erradas. Aperte "
+                                             f"{cfg['atalho_esconder']} para ver o texto original."))
+        for i, (head_txt, body) in enumerate(tips):
+            tk.Label(box, text=head_txt, font=T.font("label"), fg=T.GOLD_HI, bg=T.CARD, anchor="w").pack(
+                fill="x", padx=T.S(14), pady=(T.S(6) if i else 0, 0))
+            tk.Label(box, text=body, font=T.font("body"), fg=T.GOLD, bg=T.CARD, anchor="w",
+                     justify="left", wraplength=W - T.S(32)).pack(fill="x", padx=T.S(14), pady=(T.S(1), T.S(0)))
+        tk.Frame(box, bg=T.CARD, height=T.S(12)).pack()
 
-        # o que o tradutor precisa para funcionar; cada linha diz o que falta e resolve com um botao
-        outer, box = T.card(panel, "Preparação")
-        outer.pack(fill="x", padx=T.S(16))
-        self.row_ocr = T.StatusRow(box, "Leitor de tela")
-        self.row_mt = T.StatusRow(box, "Tradutor offline")
-        self.row_lib = T.StatusRow(box, "Biblioteca")
-        self.row_game = T.StatusRow(box, "Hytale")
-        for r in (self.row_ocr, self.row_mt, self.row_lib, self.row_game):
-            r.pack(fill="x", pady=T.S(3))
-        tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
+        # ---- faixa de baixo: funcionamento (+ verificar atualizacoes) e opcoes ----
+        left = tk.Frame(cols, bg=T.PANEL)
+        left.grid(row=1, column=0, sticky="nsew", padx=(0, gap // 2))
+        # funcionamento: com tudo certo, uma linha so. Quando algo nao funciona, so esse item aparece, com o motivo
+        # em linguagem simples e o botao que resolve (o usuario e leigo: nada de lista tecnica)
+        outer, box = T.card(left, "Funcionamento")
+        outer.pack(fill="x")
+        self.row_all = T.StatusRow(box, "Tudo funcionando")
+        self.row_all.set("off", "")
+        self._health = []
+        for name in ("Leitor de tela", "Tradutor offline", "Tradução online", "Biblioteca"):
+            item = tk.Frame(box, bg=T.CARD)
+            row = T.StatusRow(item, name)
+            row.pack(fill="x")
+            row.set("off", "Carregando...")
+            why = tk.Label(item, text="", font=T.font("caption"), fg=T.MUTED, bg=T.CARD, anchor="w",
+                           justify="left", wraplength=W - T.S(50))
+            self._health.append((item, row, why))
+        (self.row_ocr, self.ocr_why), (self.row_mt, self.mt_why), (self.row_online, self.online_why), \
+            (self.row_lib, self.lib_why) = [(r, y) for _, r, y in self._health]
+        self.health_end = tk.Frame(box, bg=T.CARD, height=T.S(8))
+        self.relayout_health()
 
-        outer, box = T.card(panel, "Opções")
-        outer.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(0)))
+        # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
+        self.btn_check = T.RButton(left, "Verificar atualizações", self.check_updates, kind="secondary", height=38)
+        self.btn_check.pack(fill="x", pady=(T.S(12), T.S(0)))
+        # recados do programa (resultado da verificacao, instalacao do leitor...): logo abaixo do botao
+        self.lbl_info = tk.Label(left, text="", font=T.font("body"), fg=T.TEXT, bg=T.PANEL, anchor="w",
+                                 justify="left", wraplength=W)
+        self.lbl_info.pack(fill="x", pady=(T.S(8), T.S(0)))
+
+        outer, box = T.card(cols, "Opções")
+        outer.grid(row=1, column=1, sticky="new", padx=(gap // 2, 0))
         can_auto = self.w.autostart_command() is not None
-        self.tg_auto = self._option(box, "Abrir junto com o Windows",
+        self.tg_auto = self._option(box, "Abrir junto com o jogo",
                                     self.w.autostart_enabled() if can_auto else False, self.set_autostart)
         if not can_auto:
             self.tg_auto.set(enabled=False)  # so existe no programa instalado
@@ -211,15 +268,7 @@ class App:
                                     cfg.get("traduzir_chat", False), self.set_chat)
         tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
 
-        # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
-        self.btn_check = T.RButton(panel, "Verificar atualizações", self.check_updates, kind="secondary", height=38)
-        self.btn_check.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(0)))
-
-        self.lbl_info = tk.Label(panel, text="", font=T.font("body"), fg=T.TEXT, bg=T.PANEL, anchor="w",
-                                 justify="left", wraplength=W - T.S(34))
-        self.lbl_info.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(0)))
-
-        # aviso de versao nova (so aparece quando existe)
+        # aviso de versao nova (so aparece quando existe), na largura toda
         self.update_box = tk.Frame(panel, bg=T.GOLD)
         inner = tk.Frame(self.update_box, bg=T.CARD)
         inner.pack(fill="both", expand=True, padx=1, pady=1)
@@ -230,10 +279,10 @@ class App:
         b.pack(side="right", padx=T.S(10), pady=T.S(6))
         self.btn_update = b
         self.footer = tk.Label(
-            panel, font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL, justify="left", anchor="w",
+            panel, font=T.font("caption"), fg=T.MUTED, bg=T.PANEL, justify="left", anchor="w",
             text=f"{cfg['atalho_liga_desliga']} liga/desliga  •  {cfg['atalho_esconder']} mostra o original  •  "
                  f"{cfg['atalho_salvar_tela']} salva a tela em texto")
-        self.footer.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(14)))
+        self.footer.pack(fill="x", padx=T.S(16), pady=(T.S(12), T.S(14)))
 
     def load_shared(self):
         try:
@@ -279,38 +328,50 @@ class App:
         """Atualiza a frase de estado e as linhas de preparacao. Sempre na thread da interface."""
         desc, active, has_win, in_rt = self.game_state
         # leitor de tela (OCR do Windows)
+        fix = ("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False) else ("Instalar", self.install_ocr)
         if getattr(self, "_ocr_since", None) is not None:
-            pass  # instalando: a linha mostra o contador (_ocr_tick); o botao Instalar nao volta no meio
+            pass  # instalando: a linha mostra o contador e o motivo (_ocr_tick); o botao nao volta no meio
         elif self.ocr is None:
             if self.ocr_error:
                 self.row_ocr.set("bad", "Não instalado")
-                self.row_ocr.action(*(("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False)
-                                      else ("Instalar", self.install_ocr)))
+                self.ocr_why.config(text="O Windows não tem o leitor de texto em inglês, que o tradutor usa para ler a "
+                                         "tela. Sem ele nada é traduzido. Clique em " + fix[0] + ".")
+                self.row_ocr.action(*fix)
             else:
                 self.row_ocr.set("off", "Carregando...")
+                self.ocr_why.config(text="")
         elif self.ocr.warning:
             self.row_ocr.set("warn", "Sem o inglês")
-            self.row_ocr.action(*(("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False)
-                                  else ("Instalar", self.install_ocr)))
+            self.ocr_why.config(text="Está usando o leitor do idioma do Windows, que erra mais o texto do jogo. "
+                                     "Clique em " + fix[0] + " para instalar o de inglês.")
+            self.row_ocr.action(*fix)
         else:
             self.row_ocr.set("ok", "Pronto")
+            self.ocr_why.config(text="")
             self.row_ocr.action(None, None)
         # tradutor offline
         if self.translator is None:
             self.row_mt.set("off", "Carregando...")
+            self.mt_why.config(text="")
         elif self.mt is not None and self.mt.ok:
             self.row_mt.set("ok", "Pronto")
+            self.mt_why.config(text="")
         else:
-            self.row_mt.set("warn", "Só a biblioteca")
-        # jogo
-        if not has_win:
-            self.row_game.set("off", "Fechado")
-        elif in_rt:
-            self.row_game.set("ok", "No Runeteria")
-        elif active:
-            self.row_game.set("ok", "Aberto")
+            self.row_mt.set("warn", "Não carregou")
+            self.mt_why.config(text="A tradução sem internet não abriu. As telas conhecidas continuam traduzidas, mas "
+                                    "texto novo fica em inglês quando a internet falhar. Reinstale o tradutor.")
+        # traducao online: so e problema se estiver ligada e sem resposta
+        online = getattr(self.mt, "online", None) if self.mt is not None else None
+        if not config.ONLINE_MT_URL or not self.cfg.get("traducao_online", True) or self.translator is None:
+            self.row_online.set("ok", "")
+            self.online_why.config(text="")
+        elif online is not None and not online.available():
+            self.row_online.set("warn", "Sem resposta")
+            self.online_why.config(text="O servidor de tradução não respondeu (sem internet?). Por enquanto o texto "
+                                        "novo usa a tradução sem internet, mais fraca. Ele tenta de novo sozinho.")
         else:
-            self.row_game.set("warn", "Fora do Runeteria")
+            self.row_online.set("ok", "Pronta")
+            self.online_why.config(text="")
         # frase principal: o proximo passo para a pessoa
         ready = self.ocr is not None and self.translator is not None
         if not self.enabled:
@@ -333,6 +394,34 @@ class App:
         self.lbl_hint.config(text=hint)
         self.btn_toggle.set(text=("Desligar" if self.enabled else "Ligar") + f" ({self.cfg['atalho_liga_desliga']})",
                             kind="secondary" if self.enabled else "primary")
+        self.relayout_health()
+        self.watch_game()
+
+    def relayout_health(self):
+        """Mostra so os itens que nao estao funcionando (com o motivo); se estao todos, uma linha so."""
+        rows = getattr(self, "_health", None)
+        if not rows:
+            return
+        bad = [(item, row, why) for item, row, why in rows if getattr(row, "state", "off") != "ok"]
+        loading = bool(bad) and all(r.state == "off" and r.value.cget("text") == "Carregando..." for _, r, _ in bad)
+        key = tuple((id(i), r.state, r.value.cget("text"), w.cget("text")) for i, r, w in bad) + (loading,)
+        if key == getattr(self, "_health_key", None):
+            return
+        self._health_key = key
+        for item, _, why in rows:
+            item.pack_forget()
+            why.pack_forget()
+        self.row_all.pack_forget()
+        self.health_end.pack_forget()
+        if not bad or loading:
+            self.row_all.set("ok" if not bad else "off", "" if not bad else "Carregando...")
+            self.row_all.pack(fill="x", pady=T.S(3))
+        else:
+            for item, row, why in bad:
+                item.pack(fill="x", pady=(T.S(3), T.S(0)))
+                if why.cget("text"):
+                    why.pack(fill="x", padx=(T.S(30), T.S(12)), pady=(T.S(2), T.S(4)))
+        self.health_end.pack()
 
     def set_autostart(self, on):
         try:
@@ -417,6 +506,8 @@ class App:
         t = int(time.monotonic() - since)
         clock = f"{t // 60}:{t % 60:02d}"
         self.row_ocr.set("off", f"Instalando... {clock}")
+        self.ocr_why.config(text="O Windows está baixando o leitor de texto em inglês.")
+        self.relayout_health()
         if t < 300:
             msg = ("O Windows está baixando e instalando o leitor de tela. Costuma levar de 1 a 5 minutos, "
                    "depende da sua internet. Pode usar o computador enquanto isso; o tradutor avisa quando terminar.")
@@ -524,6 +615,26 @@ class App:
             log_error()
 
     # ---------- carregamento ----------
+    def start_models(self):
+        if not self._models_started:
+            self._models_started = True
+            threading.Thread(target=self.load_models, daemon=True).start()
+
+    def watch_game(self):
+        """Modo "junto com o jogo": o Hytale abriu -> carrega o tradutor e mostra a janela minimizada na barra de
+        tarefas; fechou -> esconde de novo e volta a esperar (o tradutor fica carregado para a proxima vez)."""
+        has_win = self.game_state[2]
+        if self.waiting_game and has_win:
+            self.waiting_game = False
+            self._shown_by_game = True
+            self.start_models()
+            self.root.deiconify()
+            self.root.iconify()
+        elif not has_win and getattr(self, "_shown_by_game", False) and self.root.state() == "iconic":
+            self._shown_by_game = False
+            self.waiting_game = True
+            self.root.withdraw()
+
     def load_models(self):
         try:
             from mt import OfflineTranslator
@@ -836,6 +947,15 @@ class App:
 
     # ---------- thread da interface ----------
     def pump(self):
+        try:
+            if self.w.show_requested():  # abriram o tradutor de novo: a copia escondida aparece
+                self.waiting_game = self._shown_by_game = False
+                self.start_models()
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+        except Exception:
+            log_error()
         try:
             while True:
                 msg = self.ui_q.get_nowait()
@@ -1254,9 +1374,14 @@ class App:
 
     def refresh_lib_label(self):
         s = self.lib.stats()
-        extra = "".join(f"  •  {n} {nome if n > 1 else nome[:-1]}"
-                        for n, nome in ((s["automaticas"], "automáticas"), (s["suas"], "suas")) if n)
-        self.row_lib.set("ok" if s["revisadas"] else "bad", f"{s['revisadas']:,} textos".replace(",", ".") + extra)
+        if s["revisadas"]:
+            self.row_lib.set("ok", f"{s['revisadas']:,} textos".replace(",", "."))
+            self.lib_why.config(text="")
+        else:
+            self.row_lib.set("bad", "Vazia")
+            self.lib_why.config(text="A lista de traduções revisadas não abriu, então quase nada sai traduzido. "
+                                     "Clique em Verificar atualizações ou reinstale o tradutor.")
+        self.relayout_health()
 
     def dump_screen(self):
         done = {b["en"] for b in self.last_boxes}
@@ -1289,6 +1414,8 @@ if __name__ == "__main__":
                 if winutil.single_instance("RuneteriaTradutor.instancia"):
                     first = True
                     break
+        if not first and winutil.show_signal(create=False):
+            raise SystemExit(0)  # a copia aberta aparece sozinha
         if not first:
             from tkinter import messagebox
             _r = tk.Tk()

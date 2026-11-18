@@ -40,7 +40,7 @@ Name: "pt"; MessagesFile: "compiler:Languages\BrazilianPortuguese.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "Criar atalho na área de trabalho"
-Name: "autostart"; Description: "Abrir junto com o Windows (fica pronto para quando você entrar no jogo)"; Flags: unchecked
+Name: "autostart"; Description: "Abrir junto com o jogo (fica esperando, sem janela, e aparece quando o Hytale abrir)"; Flags: unchecked
 
 [Files]
 Source: "dist\TradutorRuneteria\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion
@@ -50,8 +50,8 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
 
 [Registry]
-; mesmo valor que o botao "Abrir junto com o Windows" do programa grava (winutil.set_autostart)
-Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TradutorRuneteria"; ValueData: """{app}\{#AppExe}"" --minimizado"; Flags: uninsdeletevalue; Tasks: autostart
+; mesmo valor que a opcao "Abrir junto com o jogo" do programa grava (winutil.set_autostart)
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "TradutorRuneteria"; ValueData: """{app}\{#AppExe}"" --com-o-jogo"; Flags: uninsdeletevalue; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Abrir o {#AppName}"; Flags: nowait postinstall skipifsilent
