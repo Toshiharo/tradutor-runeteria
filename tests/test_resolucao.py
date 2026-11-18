@@ -101,8 +101,23 @@ class LugarEstavel(unittest.TestCase):
         import types
         from PIL import Image
         import main
-        app = types.SimpleNamespace(_slots=[], _slot_n=0)
+        app = types.SimpleNamespace(_slots=[], _slot_n=0, _flaky={})
+        app._note_drops = types.MethodType(main.App._note_drops, app)
         return app, main, Image.new("RGB", (400, 100), "#141928")
+
+    def test_texto_que_pisca_no_cenario_fica_sem_traducao(self):
+        """Texto em cima do cenario 3D (estacao de refino) que some e volta: depois de 3 vezes, fica o original."""
+        import types
+        app, main, img = self._app()
+        b = self._b("Ready to collect", "Pronto para coletar")
+        for _ in range(3):
+            self.assertEqual(len(main.App.settle(app, img, [dict(b)])), 1)
+            for sl in app._slots:
+                sl["thumb"] = ((0, 0, 10 ** 6, 10 ** 6), None)  # o cenario mexeu: a regiao mudou
+            main.App.settle(app, img, [])
+        self.assertEqual(main.App.settle(app, img, [dict(b)]), [])
+        other = self._b("Mining", "Mineração", x=250)
+        self.assertEqual(len(main.App.settle(app, img, [dict(other)])), 1)
 
     def _b(self, en, pt, x=100, w=80, align="left"):
         return {"en": en, "pt": pt, "x": x, "y": 40, "w": w, "h": 12, "align": align}

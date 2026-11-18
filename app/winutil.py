@@ -107,19 +107,35 @@ def set_autostart(on):
     return True
 
 
-def install_english_ocr():
+def install_english_ocr(log_path=None):
     """Instala o leitor de texto em ingles do Windows. Abre o pedido de administrador (UAC) e espera
-    terminar. Devolve True se o comando rodou ate o fim (o chamador confere se o OCR apareceu)."""
+    terminar. Devolve o codigo de saida (0 = rodou ate o fim; 1223 = o usuario recusou o pedido).
+    O que o Windows respondeu vai para log_path (para entender quando falha no PC de alguem)."""
     import subprocess
     inner = "Add-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0'"
+    if log_path:
+        inner = f"try {{ {inner} -ErrorAction Stop *> '{log_path}' }} catch {{ `$_ *> '{log_path}'; exit 1 }}"
     outer = ("try { $p = Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -PassThru "
              f"-ArgumentList '-NoProfile','-Command',\"{inner}\"; exit $p.ExitCode }} catch {{ exit 1223 }}")
     try:
         r = subprocess.run(["powershell", "-NoProfile", "-Command", outer], timeout=900,
                            creationflags=0x08000000)  # CREATE_NO_WINDOW
-        return r.returncode == 0
+        return r.returncode
     except Exception:
-        return False
+        return -1
+
+
+def english_ocr_files():
+    """True se os arquivos do leitor em ingles estao no Windows (pode faltar so reabrir o programa)."""
+    return os.path.isdir(os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "OCR", "en-us"))
+
+
+def open_language_settings():
+    """Abre Configuracoes > Hora e idioma > Idioma (instalar o ingles por la tambem instala o leitor)."""
+    try:
+        os.startfile("ms-settings:regionlanguage")
+    except Exception:
+        pass
 
 
 def toplevel_hwnd(widget_id):

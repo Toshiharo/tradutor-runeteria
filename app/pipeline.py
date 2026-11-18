@@ -35,6 +35,24 @@ def _from_words(words):
 _TALL = re.compile(r"[A-Z0-9bdfhklt]")
 
 
+def _join_split_capital(words):
+    """Em algumas fontes o OCR separa a maiuscula do resto da palavra ("T wo" em vez de "Two"): o T e
+    o w quase se encostam. Junta letra maiuscula sozinha (menos A e I, que sao palavras) com a palavra
+    em minusculas logo depois, se o vao for bem menor que um espaco."""
+    out = [dict(words[0])]
+    for w in words[1:]:
+        p = out[-1]
+        gap = w["x"] - (p["x"] + p["w"])
+        if (len(p["text"]) == 1 and p["text"].isupper() and p["text"] not in "AI"
+                and w["text"][:1].islower() and w["text"][:1].isalpha() and gap < max(p["h"], w["h"]) * 0.18):
+            top = min(p["y"], w["y"])
+            p.update(text=p["text"] + w["text"], w=w["x"] + w["w"] - p["x"], y=top,
+                     h=max(p["y"] + p["h"], w["y"] + w["h"]) - top)
+        else:
+            out.append(dict(w))
+    return out
+
+
 def tidy_lines(lines):
     """Arruma as linhas do OCR antes de traduzir, usando a posicao de cada palavra.
 
@@ -48,6 +66,11 @@ def tidy_lines(lines):
     out = []
     for ln in lines:
         words = ln.get("words")
+        if words and len(words) > 1:
+            joined = _join_split_capital(words)
+            if len(joined) != len(words):
+                words = joined
+                ln = dict(ln, words=words, text=" ".join(w["text"] for w in words))
         if not words or len(words) == 1:
             out.append(ln)
             continue
@@ -244,7 +267,10 @@ class Translator:
                 try:
                     keep = {w.lower() for n in self.names_in(text) for w in n.split()}
                     # saida igual a entrada (nome proprio) ou absurdamente longa (modelo "viajou") nao serve
+                    # numeros tem que ser os mesmos do jogo ("level 10" virou "nivel IO 10")
+                    same_numbers = sorted(re.findall(r"\d+", text)) == sorted(re.findall(r"\d+", pt or ""))
                     if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
+                            and same_numbers and not re.search(r"\bI[O0]\b|\bO[I1]\b", pt)
                             and not mostly_untranslated(text, pt, known | keep)):
                         self.lib.add_auto(text, pt, "auto-tela")
                         ok = True
@@ -437,8 +463,26 @@ class Translator:
             for k in [k for k, rec in self.seen.items() if now - rec[1] > FORGET_SECONDS]:
                 del self.seen[k]
 
+    def _garbled_name(self, text):
+        """Nome do glossario lido com erro pelo OCR, sozinho ou com "(coming soon)": "EVE' RR@OT FOREST",
+        "MO MO RI WILDS". Com o erro ele nao batia com o nome, e "FOREST" virava "floresta" no meio do nome."""
+        key = re.sub(r"[^a-z]", "", re.sub(r"\([^)]*\)?\s*$", "", text).lower())
+        if len(key) < 8 or len(key) > 40:
+            return False
+        names = getattr(self, "_name_keys", None)
+        gl = getattr(self.lib, "glossary", [])
+        if names is None or self._name_src is not gl:
+            self._name_src = gl
+            names = self._name_keys = {re.sub(r"[^a-z]", "", n.lower()) for n in gl if " " in n.strip()}
+            names = self._name_keys = [n for n in names if len(n) >= 8]
+        if not names:
+            return False
+        from rapidfuzz import fuzz, process
+        hit = process.extractOne(key, names, scorer=fuzz.ratio, score_cutoff=86)
+        return bool(hit)
+
     def _one(self, text, allow_mt=True, parts=True, title=False):
-        if title == "name":
+        if title == "name" or self._garbled_name(text):
             return None  # nome com etiqueta embaixo (guilda "DAMAGE" / "[DMG]"): nem a biblioteca traduz
         exact = self.lib.knows_reviewed(text)  # a memoria automatica nao passa na frente do "por partes"
         hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86)) if exact else None

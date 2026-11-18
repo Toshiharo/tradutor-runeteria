@@ -5440,7 +5440,7 @@
 "reviewed": true
 },
 "Movement Speed": {
-"pt": "Velocidade de Movimento",
+"pt": "Velocidade de movimento",
 "source": "manual",
 "reviewed": true
 },
@@ -6885,7 +6885,7 @@
 "reviewed": true
 },
 "Attack Speed": {
-"pt": "Velocidade de Ataque",
+"pt": "Velocidade de ataque",
 "source": "manual",
 "reviewed": true
 },
@@ -13926,6 +13926,126 @@
 },
 "Listed": {
 "pt": "No quadro",
+"source": "manual",
+"reviewed": true
+},
+"No dungeon selected": {
+"pt": "Nenhuma masmorra selecionada",
+"source": "manual",
+"reviewed": true
+},
+"Requires": {
+"pt": "Requer",
+"source": "manual",
+"reviewed": true
+},
+"Unlocks": {
+"pt": "Desbloqueia",
+"source": "manual",
+"reviewed": true
+},
+"Unlocked": {
+"pt": "Desbloqueado",
+"source": "manual",
+"reviewed": true
+},
+"Locked": {
+"pt": "Bloqueado",
+"source": "manual",
+"reviewed": true
+},
+"Mining Speed": {
+"pt": "Velocidade de mineração",
+"source": "manual",
+"reviewed": true
+},
+"Mining speed": {
+"pt": "Velocidade de mineração",
+"source": "manual",
+"reviewed": true
+},
+"Chopping Speed": {
+"pt": "Velocidade de corte",
+"source": "manual",
+"reviewed": true
+},
+"Stunned": {
+"pt": "Atordoado",
+"source": "manual",
+"reviewed": true
+},
+"Stuns": {
+"pt": "Atordoa",
+"source": "manual",
+"reviewed": true
+},
+"Your guild - here is what happened while you were away.": {
+"pt": "Sua guilda - veja o que aconteceu enquanto você estava fora.",
+"source": "manual",
+"reviewed": true
+},
+"Your guild has reached the highest level.": {
+"pt": "Sua guilda chegou ao nível máximo.",
+"source": "manual",
+"reviewed": true
+},
+"New guild benefits unlocked": {
+"pt": "Novos benefícios da guilda desbloqueados",
+"source": "manual",
+"reviewed": true
+},
+"Upkeep paid - the guild is safe again.": {
+"pt": "Manutenção paga - a guilda está segura de novo.",
+"source": "manual",
+"reviewed": true
+},
+"No perks running. The Treasury buys them": {
+"pt": "Nenhuma vantagem ativa. O Tesouro compra",
+"source": "manual",
+"reviewed": true
+},
+"for everyone.": {
+"pt": "para todos.",
+"source": "manual",
+"reviewed": true
+},
+"Finish a daily to help the guild.": {
+"pt": "Complete uma diária para ajudar a guilda.",
+"source": "manual",
+"reviewed": true
+},
+"joined the guild": {
+"pt": "entrou na guilda",
+"source": "manual",
+"reviewed": true
+},
+"was removed from the guild": {
+"pt": "foi removido da guilda",
+"source": "manual",
+"reviewed": true
+},
+"was promoted": {
+"pt": "foi promovido",
+"source": "manual",
+"reviewed": true
+},
+"is the new leader (set by staff).": {
+"pt": "é o novo líder (definido pela staff).",
+"source": "manual",
+"reviewed": true
+},
+"The guild reached level 10": {
+"pt": "A guilda chegou ao nível 10",
+"source": "manual",
+"reviewed": true
+},
+"0 of 4 finished today": {
+"pt": "0 de 4 feitas hoje",
+"source": "manual",
+"reviewed": true
+},
+"Level 10 - maximum level": {
+"pt": "Nível 10 - nível máximo",
 "source": "manual",
 "reviewed": true
 }

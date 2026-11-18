@@ -64,6 +64,8 @@ _DET_ROWS = [
     ("do", "da", "dos", "das"), ("no", "na", "nos", "nas"), ("ao", "à", "aos", "às"),
     ("pelo", "pela", "pelos", "pelas"), ("todo", "toda", "todos", "todas"), ("novo", "nova", "novos", "novas"),
     ("neste", "nesta", "nestes", "nestas"), ("deste", "desta", "destes", "destas"),
+    ("nenhum", "nenhuma", "nenhuns", "nenhumas"), ("algum", "alguma", "alguns", "algumas"),
+    ("qualquer", "qualquer", "quaisquer", "quaisquer"), ("outro", "outra", "outros", "outras"),
 ]
 _DET = {form: row for row in _DET_ROWS for form in row}
 _FEM_WORDS = {"hotbar", "lootbag", "lootbags", "staff", "raid", "raids", "mana", "stamina", "build", "builds"}
@@ -100,6 +102,13 @@ def _agree(text, found, fixed):
                     words[k] = _keep_case(words[k], row[col])
             return " ".join(words) + " " + m.group(2)
         text = re.sub(r"((?:\b[^\W\d_]+\s+){1,2})(Zq\s?%d\s?x)" % i, fix, text, flags=re.I)
+
+        # particípio logo depois do termo: "NENHUMA Zq0x SELECIONADO" + masmorra -> "SELECIONADA"
+        def fix_after(m, fem=fem, plural=plural):
+            stem, end = m.group(2), m.group(3)
+            new = end[0] + ("da" if fem else "do") + ("s" if plural else "")
+            return m.group(1) + stem + _keep_case(end, new)
+        text = re.sub(r"(Zq\s?%d\s?x\s+)([^\W\d_]+?)([ai]d[oa]s?)\b" % i, fix_after, text, flags=re.I)
     return text
 
 
@@ -115,8 +124,10 @@ class OfflineTranslator:
             import ctranslate2
             import sentencepiece as spm
             ct_dir, sp_path = self._find_model(model_dir)
+            # metade dos nucleos (2 a 4): traduz mais rapido sem roubar processador do jogo
+            cores = max(2, min(4, (os.cpu_count() or 4) // 2))
             self.translator = ctranslate2.Translator(ct_dir, device="cpu", compute_type="int8",
-                                                     inter_threads=1, intra_threads=2)
+                                                     inter_threads=1, intra_threads=cores)
             self.sp = spm.SentencePieceProcessor(model_file=sp_path)
             self.ok = True
         except Exception as e:  # sem modelo: o app continua so com a biblioteca

@@ -68,6 +68,7 @@ class App:
         self.drawn_sig = None
         self._faces_memo, self._faces_pruned = {}, 0.0  # fonte escolhida por texto (ver stable_face)
         self._slots, self._slot_n = [], 0  # o que esta em cada lugar da tela (ver settle)
+        self._flaky = {}  # texto en -> (quando saiu da tela, ate quando fica sem traducao)
         self._scale, self._scale_for = 1.6, None  # escala do OCR (ver ocr_scale)
         self.mt = None
         self.ocr = None
@@ -242,12 +243,14 @@ class App:
         if self.ocr is None:
             if self.ocr_error:
                 self.row_ocr.set("bad", "Não instalado")
-                self.row_ocr.action("Instalar", self.install_ocr)
+                self.row_ocr.action(*(("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False)
+                                      else ("Instalar", self.install_ocr)))
             else:
                 self.row_ocr.set("off", "Carregando...")
         elif self.ocr.warning:
             self.row_ocr.set("warn", "Sem o inglês")
-            self.row_ocr.action("Instalar", self.install_ocr)
+            self.row_ocr.action(*(("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False)
+                                  else ("Instalar", self.install_ocr)))
         else:
             self.row_ocr.set("ok", "Pronto")
             self.row_ocr.action(None, None)
@@ -313,18 +316,48 @@ class App:
         threading.Thread(target=self._install_ocr, daemon=True).start()
 
     def _install_ocr(self):
-        self.w.install_english_ocr()
+        code = self.w.install_english_ocr(os.path.join(config.USER_DIR, "instalar_leitor.log"))
         try:
             from ocr_engine import WindowsOcr
             ocr = WindowsOcr()
-            self.ocr, self.ocr_error = ocr, None
-            self.ui_q.put(("info", "Leitor de tela em inglês instalado." if not ocr.warning
-                           else "Não foi possível instalar o leitor em inglês. O tradutor segue com o do Windows."))
+            if not ocr.warning:
+                self.ocr, self.ocr_error = ocr, None
+                self.ui_q.put(("info", "Leitor de tela em inglês instalado."))
+            elif self.w.english_ocr_files():
+                # instalou, mas o Windows so mostra o leitor novo para programas abertos depois
+                self.ui_q.put(("info", "Leitor instalado. Reabrindo o tradutor..."))
+                self.ui_q.put(("restart",))
+                return
+            elif code == 1223:
+                self.ui_q.put(("info", "O pedido do Windows foi recusado. Clique em Instalar para tentar de novo."))
+            else:
+                self.ui_q.put(("ocr_failed",))
         except Exception as e:
             log_error()
             self.ocr_error = str(e)
-            self.ui_q.put(("info", "Não foi possível instalar o leitor de tela."))
+            if self.w.english_ocr_files():
+                self.ui_q.put(("restart",))
+                return
+            self.ui_q.put(("ocr_failed",))
         self.ui_q.put(("status",))
+
+    def ocr_by_settings(self):
+        """Plano B quando a instalacao automatica falha (Windows Update bloqueado, PC da empresa...):
+        instalar o idioma ingles pelas Configuracoes tambem instala o leitor."""
+        self.w.open_language_settings()
+        self.lbl_info.config(text="Na tela que abriu, clique em Adicionar um idioma, escolha English (United States) "
+                                  "e instale. Depois feche e abra o tradutor de novo.")
+
+    def restart(self):
+        """Abre o tradutor de novo (o leitor recem-instalado so aparece para programas abertos depois)."""
+        import subprocess
+        args = [sys.executable] if getattr(sys, "frozen", False) else [sys.executable, os.path.abspath(__file__)]
+        try:
+            subprocess.Popen(args + ["--reiniciar"], close_fds=True)
+        except Exception:
+            log_error()
+            return
+        self.quit()
 
     def check_updates(self):
         """Botao "Verificar atualizacoes": traducoes novas do repositorio + versao nova do programa.
@@ -447,6 +480,11 @@ class App:
         last_rect = None
         ocr_pass = 0
         window_grab = None   # None = ainda nao testou; True = le so a janela do jogo; False = le a tela
+        grab_tries = 0       # a primeira imagem pode vir preta (tela de carregamento): tenta algumas vezes
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(1)  # o OCR roda aqui; a conferencia rapida continua enquanto ele le
+        job = None           # (leitura em andamento, imagem lida, janela)
+        resume = False       # o jogo voltou ao foco: redesenha na hora o que continua valendo
         while True:
             time.sleep(TICK)
             try:
@@ -469,10 +507,17 @@ class App:
                     if not hidden:
                         self.ui_q.put(("hide",))
                         hidden = True
-                    prev_sig = ocr_sig = None
-                    self._slots = []
+                    prev_sig = None
+                    if not (self.enabled and active and hwnd):
+                        self._slots, ocr_sig = [], None
+                    else:
+                        resume = bool(self._slots)  # so perdeu o foco (Alt+Tab): guarda o que estava na tela
+                    if job:
+                        job[0].cancel()
+                        job = None
                     continue
                 hidden = False
+                self.game_hwnd = hwnd
                 rect = self.w.client_rect(hwnd)
                 if not rect:
                     continue
@@ -503,12 +548,14 @@ class App:
                     if img is not None and window_grab is None:
                         lo, hi = img.convert("L").reduce(16).getextrema()
                         if hi - lo < 12:
-                            img = None  # veio preta/vazia: este PC nao suporta, fica com a captura da tela
+                            img = None  # veio preta/vazia: pode ser tela de carregamento ou PC sem suporte
                         else:
                             window_grab = True
                             self.ui_q.put(("recordable", self.cfg.get("permitir_gravar", True)))
                     if img is None and window_grab is None:
-                        window_grab = False
+                        grab_tries += 1
+                        if grab_tries >= 20:  # ~3 s sempre preta: este PC nao suporta, fica com a captura da tela
+                            window_grab = False
                     elif img is None:
                         continue  # falha momentanea: tenta de novo no proximo ciclo
                 if img is None:
@@ -522,6 +569,25 @@ class App:
                     if left is not None:
                         self.ui_q.put(("boxes", rect, left))
                         urgent_since, removed = urgent_since or now, True
+                    elif resume:
+                        self.ui_q.put(("boxes", rect, [sl["box"] for sl in self._slots]))
+                resume = False
+
+                # leitura que terminou: so entra o que nao mudou na tela enquanto o OCR lia
+                if job and job[0].done():
+                    fut, jimg, jrect = job
+                    job = None
+                    boxes = None
+                    try:
+                        boxes = fut.result()
+                    except Exception:
+                        log_error()
+                    if boxes is not None and jrect == rect:
+                        boxes = [b for b in boxes
+                                 if not region_changed(img, region_thumb(jimg, b["x"], b["y"], b["w"], b["h"]))]
+                        if not self.capture_safe:
+                            self._slots = []  # Windows antigo: sem conferencia de regiao, vale so a leitura nova
+                        self.ui_q.put(("boxes", rect, self.settle(img, boxes)))
 
                 # 2) quando reler a tela
                 moving = screen_diff(sig, prev_sig)
@@ -535,32 +601,36 @@ class App:
                     due = moving < STABLE or (removed and now - urgent_since >= MAX_WAIT) or periodic
                 else:
                     due = periodic
-                due = due and now - last_ocr >= MIN_GAP
+                due = due and now - last_ocr >= MIN_GAP and job is None
                 if not due:
                     continue
 
                 if urgent_since is None and screen_diff(sig, ocr_sig) == 0 and self.last_lines:
-                    boxes = self.translator.boxes(self.last_lines)  # pega traducoes que acabaram de ficar prontas
+                    lines = self.last_lines
+                    fut = pool.submit(self.translator.boxes, lines)  # traducoes que acabaram de ficar prontas
                 else:
                     # escala alternada: cada escala acha textos que a outra perde; somando as leituras
                     # (as traducoes ficam enquanto a regiao nao muda) a tela converge para o que as duas acham
                     ocr_pass += 1
-                    lines = tidy_lines(self.ocr.recognize(img, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0)))
-                    self.learn_text_size(lines, w, h)
-                    if self.cfg["usar_cores_da_tela"]:
-                        lines = add_colors(img, split_by_color(img, lines))
-                    self.last_lines = lines
-                    boxes = self.translator.boxes(lines)
-                    if self.cfg["usar_cores_da_tela"]:
-                        restyle_spans(img, boxes)
+                    fut = pool.submit(self.read_screen, img, w, h, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0))
                     ocr_sig = sig
-                if not self.capture_safe:
-                    self._slots = []  # Windows antigo: sem conferencia de regiao, vale so a leitura nova
+                job = (fut, img, rect)
                 last_ocr, urgent_since, removed = now, None, False
-                self.ui_q.put(("boxes", rect, self.settle(img, boxes)))
             except Exception:
                 log_error()
                 time.sleep(2)
+
+    def read_screen(self, img, w, h, scale):
+        """Le a tela e monta as traducoes (roda fora do laco de captura)."""
+        lines = tidy_lines(self.ocr.recognize(img, scale))
+        self.learn_text_size(lines, w, h)
+        if self.cfg["usar_cores_da_tela"]:
+            lines = add_colors(img, split_by_color(img, lines))
+        self.last_lines = lines
+        boxes = self.translator.boxes(lines)
+        if self.cfg["usar_cores_da_tela"]:
+            restyle_spans(img, boxes)
+        return boxes
 
     # ---------- resolucao ----------
     def ocr_scale(self, w, h):
@@ -593,6 +663,13 @@ class App:
                 elif kind == "hide":
                     self.hide_overlay()
                     self.hidden_for_capture.set()
+                elif kind == "restart":
+                    self.restart()
+                    return
+                elif kind == "ocr_failed":
+                    self.ocr_failed = True
+                    self.ocr_by_settings()
+                    self.refresh_status()
                 elif kind == "recordable":
                     # o OCR le so a janela do jogo: o overlay pode aparecer em gravacoes e transmissoes
                     self.capture_safe = True
@@ -621,6 +698,12 @@ class App:
                     self.lbl_update.config(text=f"Versão {msg[1]} disponível")
                     self.update_box.pack(fill="x", padx=T.S(16), pady=(T.S(10), 0), before=self.footer)
         except queue.Empty:
+            pass
+        try:
+            gh = getattr(self, "game_hwnd", None)
+            if self.ov_shown and gh and not self.w.is_foreground(gh, (self.ov_hwnd,)):
+                self.hide_overlay()  # Alt+Tab: nao espera a leitura em andamento terminar
+        except Exception:
             pass
         self.root.after(40, self.pump)
 
@@ -661,14 +744,19 @@ class App:
         - discordar da atual 3 leituras seguidas (a primeira e que estava errada).
         """
         slots = [sl for sl in self._slots if not region_changed(img, sl["thumb"])]
+        self._note_drops([sl for sl in self._slots if sl not in slots])
         used = set()
+        now = time.monotonic()
         for b in boxes:
             sl = next((x for x in slots if id(x) not in used and _overlap(x["box"], b)), None)
             if sl is None:
+                if self._flaky.get(b["en"], (0, 0))[1] > now:
+                    continue  # some e volta sem parar (texto no cenario com a camera mexendo): fica o original
                 self._slot_n += 1
                 nb = dict(b)
                 nb["_slot"] = self._slot_n
-                sl = {"box": nb, "thumb": region_thumb(img, b["x"], b["y"], b["w"], b["h"]), "cand": None, "n": 0}
+                sl = {"box": nb, "thumb": region_thumb(img, b["x"], b["y"], b["w"], b["h"]), "cand": None, "n": 0,
+                      "born": now}
                 slots.append(sl)
                 used.add(id(sl))
                 continue
@@ -703,10 +791,25 @@ class App:
         keep = [sl for sl in self._slots if not region_changed(img, sl["thumb"])]
         if len(keep) == len(self._slots):
             return None
+        self._note_drops([sl for sl in self._slots if sl not in keep])
         if len(keep) <= len(self._slots) * 0.4:
             keep = []  # a maioria mudou de uma vez: o menu fechou ou trocou inteiro
         self._slots = keep
         return [sl["box"] for sl in keep]
+
+    def _note_drops(self, gone):
+        """Traducao que sai da tela pouco depois de aparecer, 3 vezes em 20 s, e texto em cima do cenario
+        3D (estacao de refino, nome sobre a cabeca): com a camera mexendo ele piscava entre as duas linguas.
+        Esse texto fica sem traducao por 30 s."""
+        now = time.monotonic()
+        for sl in gone:
+            if now - sl.get("born", 0) > 2.5:
+                continue
+            en = sl["box"]["en"]
+            times = [t for t in self._flaky.get(en, ([], 0))[0] if now - t < 20] + [now]
+            self._flaky[en] = (times, now + 30 if len(times) >= 3 else 0)
+        if len(self._flaky) > 500:
+            self._flaky = {k: v for k, v in self._flaky.items() if v[1] > now or v[0][-1] > now - 20}
 
     def _memo(self, b):
         now = time.monotonic()
@@ -964,7 +1067,14 @@ class App:
 if __name__ == "__main__":
     try:
         import winutil
-        if not winutil.single_instance("RuneteriaTradutor.instancia"):
+        first = winutil.single_instance("RuneteriaTradutor.instancia")
+        if not first and "--reiniciar" in sys.argv:
+            for _ in range(40):  # reabrindo: espera a copia anterior fechar
+                time.sleep(0.25)
+                if winutil.single_instance("RuneteriaTradutor.instancia"):
+                    first = True
+                    break
+        if not first:
             from tkinter import messagebox
             _r = tk.Tk()
             _r.withdraw()

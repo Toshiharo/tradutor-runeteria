@@ -101,6 +101,16 @@ Objetivo de missão "Verbo N Item" ("Mine 15 Rock Blocks") traduz só o verbo, c
 Trecho que só caberia com letra menor que a do resto da linha, ou que deixaria buraco, troca pela linha inteira (`alt`);
 a família da fonte do trecho vem da linha inteira (`line_ref`). Em MAIÚSCULAS a altura ignora a cauda do Q (`ink_rows caps`).
 
+## Atraso (feedback da beta)
+O OCR roda num `ThreadPoolExecutor` (`App.read_screen`): enquanto lê, o laço segue conferindo as regiões a cada
+0,15 s (tradução velha sai em ~0,1 s ao trocar de aba). O resultado só entra para as regiões que não mudaram durante
+a leitura. Alt+Tab: `pump` confere o foco a cada 40 ms e esconde na hora; os slots ficam guardados e voltam em ~0,1 s.
+Texto que sai da tela menos de 2,5 s depois de aparecer, 3 vezes em 20 s (texto no cenário 3D), fica 30 s sem
+tradução (`_note_drops`/`_flaky`). Medir com o jogo simulado (`App` com `w.grab_window` devolvendo capturas).
+Leitor de tela: se instalou mas o processo não enxerga, reabre o app (`restart`, `--reiniciar`); se falhou, abre
+Configurações > Idioma (`ocr_by_settings`). Log do Windows em `instalar_leitor.log`.
+Nome do glossário lido com erro pelo OCR ("EVE' RR@OT FOREST") fica em inglês (`Translator._garbled_name`).
+
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura
 nova só troca se for mais completa, se o mesmo texto couber numa caixa bem mais estreita, ou se discordar 3 leituras

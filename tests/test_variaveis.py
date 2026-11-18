@@ -149,6 +149,36 @@ class ObjetivoDeMissao(unittest.TestCase):
         self.assertEqual(LIB.lookup("Mine")[0], "Meus")
 
 
+class FeedbackBeta(unittest.TestCase):
+    """Problemas relatados por jogadores na beta."""
+
+    def test_nome_de_servidor_lido_com_erro_fica_em_ingles(self):
+        for t in ("EVE' RR@OT FOREST", "BRAVEWIND PEAKS", "MO MO RI WILDS (COMING SOON)"):
+            self.assertIsNone(TR._one(t, allow_mt=False), t)
+        for t in ("FOREST", "Guild Activity", "Overview"):
+            self.assertFalse(TR._garbled_name(t), t)
+
+    def test_maiuscula_separada_pelo_ocr(self):
+        from pipeline import tidy_lines
+        ws = [{"text": "T", "x": 0, "y": 0, "w": 6, "h": 10}, {"text": "wo", "x": 6, "y": 2, "w": 12, "h": 8},
+              {"text": "skill", "x": 22, "y": 0, "w": 20, "h": 10}]
+        self.assertEqual(tidy_lines([{"text": "T wo skill", "x": 0, "y": 0, "w": 42, "h": 10, "words": ws}])[0]["text"],
+                         "Two skill")
+        ws = [{"text": "I", "x": 0, "y": 0, "w": 3, "h": 10}, {"text": "in", "x": 5, "y": 2, "w": 9, "h": 8}]
+        self.assertEqual(tidy_lines([{"text": "I in", "x": 0, "y": 0, "w": 14, "h": 10, "words": ws}])[0]["text"],
+                         "I in")
+
+    def test_requer_e_velocidade(self):
+        self.assertEqual(TR._one("Requires 1 Novice Crafting Manual")[0], "Requer 1 Novice Crafting Manual")
+        self.assertEqual(TR._one("Mining Speed +5%")[0], "Velocidade de mineração +5%")
+        self.assertEqual(TR._one("NO DUNGEON SELECTED")[0], "NENHUMA MASMORRA SELECIONADA")
+
+    @unittest.skipUnless(MT.ok, "modelo offline nao encontrado")
+    def test_concordancia_e_stun(self):
+        self.assertIn("Nenhuma masmorra selecionada", MT.translate_many(["No dungeon selected yet"])[0])
+        self.assertIn("atordoa", MT.translate_many(["This attack stuns the target for 2 seconds."])[0])
+
+
 class FraseComTraco(unittest.TestCase):
     def test_frase_depois_de_traco_nao_vira_meio_traduzida(self):
         r = TR.compose("Your guild - here is what happened while you were away.")

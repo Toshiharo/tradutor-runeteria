@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "Tradutor Runeteria"
-APP_VERSION = "1.0.0"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
+APP_VERSION = "1.0.1"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
 APP_STAGE = "beta"      # "beta" mostra o aviso de versao de testes na janela; "" na versao final
 REPO = "Toshiharo/tradutor-runeteria"
 
