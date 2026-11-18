@@ -30,7 +30,7 @@ _PTBR = [(re.compile(p, re.I), r) for p, r in [
     (r"\bstock(s?)\b", r"estoque\1"), (r"\bexistências\b", "estoque"), (r"\bantevisão\b", "prévia"),
     (r"\bregisto(s?)\b", r"registro\1"), (r"\bpalavra-passe\b", "senha"), (r"\bsítio(s?)\b", r"local\1"),
     (r"\bcontact(\w+)", r"contat\1"), (r"\bpartilh(\w+)", r"compartilh\1"), (r"\bgravar\b", "salvar"),
-    (r"\bapagar\b", "excluir"), (r"\bpára\b", "para"), (r"\bcasa de banho\b", "banheiro"),
+    (r"\bpára\b", "para"), (r"\bcasa de banho\b", "banheiro"),
     (r"\bequipamentos? desportivos?\b", "equipamento esportivo"), (r"\bdesport(\w+)", r"esport\1"),
     # ortografia antiga: accao, actualizar, seleccionar, objecto, optimo, direccao...
     (r"\bactu(\w+)", r"atu\1"), (r"\bactiv(\w+)", r"ativ\1"),
@@ -55,11 +55,61 @@ def to_ptbr(text):
     return text
 
 
+# Concordancia: o modelo ve so um marcador no lugar do termo fixo e chuta o artigo ("o seu mochila").
+# Formas (masc. sing., fem. sing., masc. plural, fem. plural) das palavrinhas que vem antes do termo.
+_DET_ROWS = [
+    ("o", "a", "os", "as"), ("um", "uma", "uns", "umas"), ("este", "esta", "estes", "estas"),
+    ("esse", "essa", "esses", "essas"), ("aquele", "aquela", "aqueles", "aquelas"),
+    ("seu", "sua", "seus", "suas"), ("meu", "minha", "meus", "minhas"), ("nosso", "nossa", "nossos", "nossas"),
+    ("do", "da", "dos", "das"), ("no", "na", "nos", "nas"), ("ao", "à", "aos", "às"),
+    ("pelo", "pela", "pelos", "pelas"), ("todo", "toda", "todos", "todas"), ("novo", "nova", "novos", "novas"),
+    ("neste", "nesta", "nestes", "nestas"), ("deste", "desta", "destes", "destas"),
+]
+_DET = {form: row for row in _DET_ROWS for form in row}
+_FEM_WORDS = {"hotbar", "lootbag", "lootbags", "staff", "raid", "raids", "mana", "stamina", "build", "builds"}
+_FEM_END = ("a", "as", "ão", "ões", "gem", "gens", "dade", "dades")
+
+
+def _gender_number(term):
+    """(feminino?, plural?) de um termo em portugues, pela primeira palavra ('caixa de correio' -> caixa)."""
+    first = term.split()[0].lower()
+    fem = first in _FEM_WORDS or first.endswith(_FEM_END)
+    plural = (first.endswith("s") and not first.endswith("ss") and not term.split()[0].isupper()
+              and first not in ("status", "bônus"))
+    return fem, plural
+
+
+def _agree(text, found, fixed):
+    """Acerta artigo/possessivo antes de cada termo fixo: 'o seu Zq0x' + mochila -> 'a sua Zq0x'."""
+    for i, term in enumerate(found):
+        if not fixed[i]:
+            continue
+        fem, plural = _gender_number(term)
+        col = (2 if plural else 0) + (1 if fem else 0)
+
+        def fix(m, col=col):
+            words = m.group(1).split()
+            # de tras para frente, parando na primeira palavra que nao e artigo/possessivo:
+            # em "da o bonus Zq0x" o "o" pertence a "bonus", nao ao termo
+            for k in range(len(words) - 1, -1, -1):
+                row = _DET.get(words[k].lower())
+                if not row:
+                    break
+                # "a"/"as" sozinhos podem ser preposicao: so troca o que e claramente artigo/possessivo
+                if not (words[k].lower() in ("a", "as") and col in (0, 2)):
+                    words[k] = _keep_case(words[k], row[col])
+            return " ".join(words) + " " + m.group(2)
+        text = re.sub(r"((?:\b[^\W\d_]+\s+){1,2})(Zq\s?%d\s?x)" % i, fix, text, flags=re.I)
+    return text
+
+
 class OfflineTranslator:
-    def __init__(self, model_dir, glossary):
+    def __init__(self, model_dir, glossary, terms=None):
         self.ok = False
         self.error = None
-        self.glossary = glossary  # lista ordenada (maiores primeiro)
+        self.glossary = glossary  # nomes que ficam em ingles
+        self.terms = terms or {}  # termos de jogo com traducao fixa {ingles: portugues}
+        self._rules_key = self._rules_cache = None
         self._lock = threading.Lock()
         try:
             import ctranslate2
@@ -85,17 +135,28 @@ class OfflineTranslator:
         return ct_dir, sp_path
 
     # ---------- protecao do glossario ----------
-    def _protect(self, text):
-        found = []
-        out = text
-        for term in self.glossary:
-            pat = re.compile(r"(?<![\w])" + re.escape(term) + r"(?![\w])", re.I)
+    def _rules(self):
+        """[(regex, substituto ou None)] do maior termo para o menor. None = fica como esta no original."""
+        key = (id(self.glossary), len(self.glossary), id(self.terms), len(self.terms))
+        if self._rules_key != key:
+            items = [(t, None) for t in self.glossary] + list(self.terms.items())
+            items.sort(key=lambda it: len(it[0]), reverse=True)
+            self._rules_cache = [(re.compile(r"(?<![\w])" + re.escape(t) + r"(?![\w])", re.I), r) for t, r in items]
+            self._rules_key = key
+        return self._rules_cache
 
-            def rep(m):
-                found.append(m.group(0))
+    def _protect(self, text):
+        """Troca por marcadores os nomes que ficam em ingles e os termos de jogo com traducao fixa
+        (hotbar -> Hotbar, quest -> missao), para o modelo nao inventar ('barra quente')."""
+        found, fixed = [], []
+        out = text
+        for pat, repl in self._rules():
+            def rep(m, repl=repl):
+                found.append(m.group(0) if repl is None else _keep_case(m.group(0), repl))
+                fixed.append(repl is not None)
                 return PH_FMT.format(len(found) - 1)
             out = pat.sub(rep, out)
-        return out, found
+        return out, found, fixed
 
     @staticmethod
     def _restore(text, found):
@@ -129,22 +190,24 @@ class OfflineTranslator:
             # o modelo erra muito com TUDO EM MAIUSCULAS ("SETTINGS" -> "CONSTITUICOES"):
             # traduz em caixa normal e devolve em maiusculas no fim
             text = text.capitalize()
-        prot, found = self._protect(text)
+        prot, found, fixed = self._protect(text)
         if found and not re.search(r"[A-Za-z]{2}", PH_RE.sub("", prot)):
-            return original  # so termos do glossario: fica igual
-        out = self._raw([prot])[0]
-        out, complete = self._restore(out, found)
-        if not complete:
-            # o modelo "comeu" um termo protegido: traduz os pedacos entre os termos
-            parts = re.split("(" + "|".join(re.escape(f) for f in found) + ")", text)
-            pieces = []
-            for p in parts:
-                if p in found or not re.search(r"[A-Za-z]{2}", p):
-                    pieces.append(p)
-                else:
-                    pieces.append(self._raw([p.strip()])[0])
-            out = " ".join(s.strip() for s in pieces if s.strip())
-        out = to_ptbr(out)
+            out = self._restore(prot, found)[0]  # so termos conhecidos: nao precisa do modelo
+        else:
+            out = _agree(self._raw([prot])[0], found, fixed)
+            out, complete = self._restore(out, found)
+            if not complete:
+                # o modelo "comeu" um termo protegido: traduz os pedacos entre os termos
+                pieces = []
+                for i, p in enumerate(PH_RE.split(prot)):  # [texto, indice, texto, indice, ...]
+                    if i % 2:
+                        pieces.append(found[int(p)])
+                    elif re.search(r"[A-Za-z]{2}", p):
+                        pieces.append(self._raw([p.strip()])[0])
+                    else:
+                        pieces.append(p)
+                out = " ".join(s.strip() for s in pieces if s.strip())
+            out = to_ptbr(out)
         # o modelo gosta de por ponto final em rotulo curto ("Look" -> "Olha.")
         if out.endswith(".") and not out.endswith("..") and original[-1] not in ".!?:;":
             out = out[:-1]

@@ -50,6 +50,12 @@ CORRIGIR UMA TRADUÇÃO
 NOMES QUE NÃO DEVEM SER TRADUZIDOS
 Adicione em glossario.json (na pasta de traduções), em "manter_em_ingles".
 
+TERMOS DE JOGO
+Hotbar, loot, boss, buff, HP, XP, tier, rank, pet etc. ficam em inglês. Para a tradução
+automática escrever um termo sempre do mesmo jeito, adicione em glossario.json, em
+"termos_fixos":   "hotbar": "Hotbar",   "quest": "missão"
+Depois clique em "Recarregar minhas traduções".
+
 Pasta de traduções: %APPDATA%\RuneteriaTradutor
 Se algo der errado, mande o arquivo erros.log dessa pasta.
 

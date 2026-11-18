@@ -58,11 +58,22 @@ class Library:
 
     # ---------- carregamento ----------
     def _load_glossary(self):
-        g = read_json(SEED_GLOSSARY, {}).get("manter_em_ingles", [])
+        seed = read_json(SEED_GLOSSARY, {})
+        g = seed.get("manter_em_ingles", [])
         user = read_json(USER_GLOSSARY, None)
         if user is None:
-            write_json(USER_GLOSSARY, {"_leia": "Adicione termos que nunca devem ser traduzidos.", "manter_em_ingles": []})
+            write_json(USER_GLOSSARY, {
+                "_leia": "manter_em_ingles: termos que nunca devem ser traduzidos. "
+                         "termos_fixos: como a traducao automatica deve escrever um termo, ex. \"hotbar\": \"Hotbar\".",
+                "manter_em_ingles": [], "termos_fixos": {}})
             user = {}
+        # termos_fixos: {ingles: como escrever em portugues}; os do usuario vencem os do programa
+        terms = {}
+        for src in (seed, user):
+            for en, pt in (src.get("termos_fixos") or {}).items():
+                if isinstance(pt, str) and en.strip() and pt.strip():
+                    terms[en.strip().lower()] = pt.strip()
+        self.terms = terms
         g = list(g) + list(user.get("manter_em_ingles", []))
         return sorted({t for t in g if t.strip()}, key=len, reverse=True)
 

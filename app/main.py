@@ -115,7 +115,7 @@ class App:
         self.ui_q.put(("info", "Carregando tradução offline..."))
         try:
             from mt import OfflineTranslator
-            self.mt = OfflineTranslator(MODEL_DIR, self.lib.glossary)
+            self.mt = OfflineTranslator(MODEL_DIR, self.lib.glossary, self.lib.terms)
             if not self.mt.ok:
                 self.ui_q.put(("info", "Tradução automática indisponível (só biblioteca). " + (self.mt.error or "")))
         except Exception:
@@ -184,7 +184,9 @@ class App:
                 was_active = active
                 if not self.enabled or self.translator is None or self.ocr is None or \
                         not hwnd or not active or self.w.is_minimized(hwnd) or \
-                        not self.w.is_foreground(hwnd, (self.ov_hwnd, self.ctrl_hwnd)):
+                        not self.w.is_foreground(hwnd, (self.ov_hwnd,)):
+                    # so com o JOGO em foco: com outra janela na frente (Discord, navegador) a captura
+                    # pegaria o texto dela e mandaria para a traducao automatica
                     if not hidden:
                         self.ui_q.put(("hide",))
                         hidden = True
@@ -357,6 +359,7 @@ class App:
         self.lib.reload_user_files()
         if self.mt is not None:
             self.mt.glossary = self.lib.glossary
+            self.mt.terms = self.lib.terms
         self.refresh_lib_label()
         self.lbl_info.config(text="Suas traduções e glossário foram recarregados.")
 

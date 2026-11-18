@@ -72,6 +72,21 @@ def looks_translatable(text):
     return any(len(w) >= 3 for w in good)
 
 
+def mostly_untranslated(src, pt, known=()):
+    """True se boa parte da 'traducao' sao palavras copiadas do original.
+
+    Acontece quando o OCR leu errado ('Incrcascs your chancc') ou quando o texto nao e ingles:
+    o modelo nao reconhece as palavras e as devolve iguais. Isso nao deve ir para a memoria.
+    """
+    src_words = {w.lower() for w in WORD_RE.findall(src) if len(w) >= 4}
+    out_words = [w.lower() for w in re.findall(r"[^\W\d_]{4,}", pt)]
+    out_words = [w for w in out_words if w not in known]
+    if not out_words:
+        return False
+    same = [w for w in out_words if w in src_words]
+    return len(same) >= 2 and len(same) / len(out_words) >= 0.3
+
+
 class Translator:
     """Biblioteca primeiro; o que nao achar vai para a fila da traducao offline (em segundo plano)."""
 
@@ -98,7 +113,8 @@ class Translator:
             try:
                 pt = self.mt.translate(text)
                 # saida igual a entrada (nome proprio) ou absurdamente longa (modelo "viajou") nao serve
-                if pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20:
+                if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
+                        and not mostly_untranslated(text, pt, self._known_words())):
                     self.lib.add_auto(text, pt, "auto-tela")
                     ok = True
             except Exception:
@@ -109,6 +125,13 @@ class Translator:
                         self.failed.clear()
                     self.failed.add(key)
                 self.pending.discard(key)
+
+    def _known_words(self):
+        """Palavras que e normal sairem iguais na traducao: nomes do glossario e termos mantidos em ingles."""
+        words = set()
+        for t in list(getattr(self.lib, "glossary", [])) + list(getattr(self.lib, "terms", {}).values()):
+            words.update(w.lower() for w in WORD_RE.findall(t))
+        return words
 
     def _maybe_queue(self, text):
         """Manda para a traducao automatica so o que parece texto de verdade e esta parado na tela."""

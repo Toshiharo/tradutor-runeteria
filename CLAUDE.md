@@ -45,6 +45,11 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
 ## Convenções de tradução
 Nomes próprios ficam em inglês (classes Warrior/Mage/Rogue/Priest, skills, itens, Hollow Crypt, Rune Coins,
 raças como Kweeborn, Battle Master, Race Change Token, títulos de músicas). UI genérica é traduzida.
+Termos de jogo que o jogador brasileiro usa em inglês ficam em inglês: Hotbar, loot, Lootbag, drop, boss, World Boss,
+buff, mob, NPC, HP, XP, PvP, tier, rank, pet, crafting, stamina, homestead (nunca "barra quente", "chefe", "PV").
+Traduzidos: quest→missão, bag→bolsa, slot→espaço, stall→banca, dungeon→masmorra, party→grupo, cooldown→recarga.
+A lista vale também para a tradução automática: `termos_fixos` em `data/glossario.json` (`mt._protect` troca o termo
+por marcador e `_agree` acerta artigo/possessivo). Ao mudar um termo, mude na biblioteca e no glossário.
 Profissões/bancadas traduzidas nos textos de maestria (Sawmill→Serraria, Tannery→Curtume, Loom→Tear, Smelter→Fundição).
 Labels com `RenderUppercase` aparecem em MAIÚSCULAS no OCR — a biblioteca compara sem diferenciar caixa.
 

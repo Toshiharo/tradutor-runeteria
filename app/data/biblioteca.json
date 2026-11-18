@@ -670,7 +670,7 @@
 "reviewed": true
 },
 "HP": {
-"pt": "PV",
+"pt": "HP",
 "source": "manual",
 "reviewed": true
 },
@@ -690,7 +690,7 @@
 "reviewed": true
 },
 "1. Pet Name (Type) Lv.1 | HP: 100 | DMG: 10": {
-"pt": "1. Nome do pet (Tipo) Nv.1 | PV: 100 | DANO: 10",
+"pt": "1. Nome do pet (Tipo) Nv.1 | HP: 100 | DANO: 10",
 "source": "manual",
 "reviewed": true
 },
@@ -4045,7 +4045,7 @@
 "reviewed": true
 },
 "Winner HP: 15/20": {
-"pt": "PV do vencedor: 15/20",
+"pt": "HP do vencedor: 15/20",
 "source": "manual",
 "reviewed": true
 },
@@ -7030,7 +7030,7 @@
 "reviewed": true
 },
 "HOTBAR": {
-"pt": "BARRA RÁPIDA",
+"pt": "HOTBAR",
 "source": "manual",
 "reviewed": true
 },
@@ -7055,7 +7055,7 @@
 "reviewed": true
 },
 "To Hotbar": {
-"pt": "Para a barra rápida",
+"pt": "Para a Hotbar",
 "source": "manual",
 "reviewed": true
 },
@@ -7505,7 +7505,7 @@
 "reviewed": true
 },
 "BOSS": {
-"pt": "CHEFE",
+"pt": "BOSS",
 "source": "manual",
 "reviewed": true
 },
@@ -7940,7 +7940,7 @@
 "reviewed": true
 },
 "BOSS HUNT": {
-"pt": "CAÇA A CHEFES",
+"pt": "CAÇA A BOSSES",
 "source": "manual",
 "reviewed": true
 },
@@ -8800,7 +8800,7 @@
 "reviewed": true
 },
 "MOB HP": {
-"pt": "PV DOS MOBS",
+"pt": "HP DOS MOBS",
 "source": "manual",
 "reviewed": true
 },
@@ -9015,7 +9015,7 @@
 "reviewed": true
 },
 "Rare and better from the boss chests - hover an item to inspect it.": {
-"pt": "Raros e melhores dos baús do chefe - passe o mouse num item para inspecioná-lo.",
+"pt": "Raros e melhores dos baús do boss - passe o mouse num item para inspecioná-lo.",
 "source": "manual",
 "reviewed": true
 },
@@ -9140,7 +9140,7 @@
 "reviewed": true
 },
 "MAX HP": {
-"pt": "PV MÁX",
+"pt": "HP MÁX",
 "source": "manual",
 "reviewed": true
 },
@@ -9150,7 +9150,7 @@
 "reviewed": true
 },
 "Elite and Boss favor higher materials at the same level. Base: 1-3 units. Independent 5% bonus: 2-5 units. No items granted.": {
-"pt": "Elite e Chefe favorecem materiais melhores no mesmo nível. Base: 1-3 unidades. Bônus independente de 5%: 2-5 unidades. Nenhum item é dado.",
+"pt": "Elite e Boss favorecem materiais melhores no mesmo nível. Base: 1-3 unidades. Bônus independente de 5%: 2-5 unidades. Nenhum item é dado.",
 "source": "manual",
 "reviewed": true
 },
@@ -9180,7 +9180,7 @@
 "reviewed": true
 },
 "Max HP also affects some existing Essentials extras. Gear rows show pool picks before stat rolls. Excludes carried items, world weapon transforms and Rune Loot overrides.": {
-"pt": "O PV máximo também afeta alguns extras do Essentials. As linhas de equipamento mostram o sorteio do grupo antes da rolagem de atributos. Não inclui itens carregados, transformações de armas do mundo nem substituições do Rune Loot.",
+"pt": "O HP máximo também afeta alguns extras do Essentials. As linhas de equipamento mostram o sorteio do grupo antes da rolagem de atributos. Não inclui itens carregados, transformações de armas do mundo nem substituições do Rune Loot.",
 "source": "manual",
 "reviewed": true
 },
@@ -9375,7 +9375,7 @@
 "reviewed": true
 },
 "HOTBAR SLOT 3, 5 OF 18 USED": {
-"pt": "BARRA RÁPIDA ESPAÇO 3, 5 DE 18 USADOS",
+"pt": "HOTBAR ESPAÇO 3, 5 DE 18 USADOS",
 "source": "manual",
 "reviewed": true
 },
@@ -10630,7 +10630,7 @@
 "reviewed": true
 },
 "SALVAGE HOTBAR ITEM": {
-"pt": "DESMONTAR ITEM DA BARRA RÁPIDA",
+"pt": "DESMONTAR ITEM DA HOTBAR",
 "source": "manual",
 "reviewed": true
 },
@@ -10695,7 +10695,7 @@
 "reviewed": true
 },
 "WORLD BOSS": {
-"pt": "CHEFE MUNDIAL",
+"pt": "WORLD BOSS",
 "source": "manual",
 "reviewed": true
 },
@@ -13791,6 +13791,51 @@
 },
 "ANY ONE COLOUR": {
 "pt": "QUALQUER COR",
+"source": "manual",
+"reviewed": true
+},
+"MINING": {
+"pt": "MINERAÇÃO",
+"source": "manual",
+"reviewed": true
+},
+"PROGRESS TO LEVEL 4": {
+"pt": "PROGRESSO PARA O NÍVEL 4",
+"source": "manual",
+"reviewed": true
+},
+"UPGRADE": {
+"pt": "MELHORAR",
+"source": "manual",
+"reviewed": true
+},
+"+ UPGRADE": {
+"pt": "+ MELHORAR",
+"source": "manual",
+"reviewed": true
+},
+"BUILDER'S WORKBENCH": {
+"pt": "BANCADA DO CONSTRUTOR",
+"source": "manual",
+"reviewed": true
+},
+"To level 21": {
+"pt": "Até o nível 21",
+"source": "manual",
+"reviewed": true
+},
+"FOREST": {
+"pt": "FLORESTA",
+"source": "manual",
+"reviewed": true
+},
+"Crafted by": {
+"pt": "Craftado por",
+"source": "manual",
+"reviewed": true
+},
+"Increases your chance of catching fish and favors better fish with quicker bites. Treasure is still possible. One is used each bite. Right-click while holding this bait with a rod in your hotbar to open its tackle menu and apply it.": {
+"pt": "Aumenta sua chance de pegar peixes e favorece peixes melhores, com mordidas mais rápidas. Ainda é possível vir tesouro. Uma é usada a cada mordida. Clique com o botão direito segurando esta isca, com uma vara na sua Hotbar, para abrir o menu de apetrechos e aplicá-la.",
 "source": "manual",
 "reviewed": true
 }
