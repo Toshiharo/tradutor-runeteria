@@ -14668,5 +14668,585 @@
 "pt": "As vacas pastam nas planícies dos servidores SMP. Você precisa de um macho e de uma fêmea para reproduzir, e dá para saber qual é qual antes de domar: segure sua flauta e olhe para uma vaca selvagem para ver se é macho ou fêmea, junto com as características dela. Depois segure alface e use na vaca para domá-la: cada doma gasta uma. Todo animal que você tem fica ligado à sua flauta.",
 "source": "manual",
 "reviewed": true
+},
+"1 colours left": {
+"pt": "1 cores restantes",
+"source": "manual",
+"reviewed": true
+},
+"1 fish to sell": {
+"pt": "1 peixes para vender",
+"source": "manual",
+"reviewed": true
+},
+"1 items • page 1 of 1": {
+"pt": "1 itens • página 1 de 1",
+"source": "manual",
+"reviewed": true
+},
+"1 left today": {
+"pt": "1 restantes hoje",
+"source": "manual",
+"reviewed": true
+},
+"1 playing": {
+"pt": "1 jogando",
+"source": "manual",
+"reviewed": true
+},
+"1 shop • 1 with stock": {
+"pt": "1 loja • 1 com estoque",
+"source": "manual",
+"reviewed": true
+},
+"1 shops • 1 with stock": {
+"pt": "1 lojas • 1 com estoque",
+"source": "manual",
+"reviewed": true
+},
+"A horned warhorse in gilded war plate, as fearsome as it is loyal. Legendary in every colour.": {
+"pt": "Um cavalo de guerra com chifres e armadura de placas dourada, tão temível quanto leal. Lendário em todas as cores.",
+"source": "manual",
+"reviewed": true
+},
+"Advanced rendering": {
+"pt": "Renderização avançada",
+"source": "manual",
+"reviewed": true
+},
+"Ancient canopies and root-bound ruins.": {
+"pt": "Copas antigas e ruínas tomadas por raízes.",
+"source": "manual",
+"reviewed": true
+},
+"Attribute points available": {
+"pt": "Pontos de atributo disponíveis",
+"source": "manual",
+"reviewed": true
+},
+"Audio": {
+"pt": "Áudio",
+"source": "manual",
+"reviewed": true
+},
+"Automatically": {
+"pt": "Automaticamente",
+"source": "manual",
+"reviewed": true
+},
+"Best catch": {
+"pt": "Melhor pesca",
+"source": "manual",
+"reviewed": true
+},
+"Buy the rest": {
+"pt": "Comprar o resto",
+"source": "manual",
+"reviewed": true
+},
+"Campfire": {
+"pt": "Fogueira",
+"source": "manual",
+"reviewed": true
+},
+"Can you tell me anything interesting about the Town?": {
+"pt": "Pode me contar algo interessante sobre a cidade?",
+"source": "manual",
+"reviewed": true
+},
+"Cletus'll learn ya proper.": {
+"pt": "O Cletus te ensina direitinho.",
+"source": "manual",
+"reviewed": true
+},
+"Click a fish in your catch to see what it fetches.": {
+"pt": "Clique em um peixe da sua pesca para ver quanto ele rende.",
+"source": "manual",
+"reviewed": true
+},
+"Cloth": {
+"pt": "Tecido",
+"source": "manual",
+"reviewed": true
+},
+"Cloth outfits": {
+"pt": "Trajes de tecido",
+"source": "manual",
+"reviewed": true
+},
+"Cold": {
+"pt": "Frio",
+"source": "manual",
+"reviewed": true
+},
+"Competition": {
+"pt": "Competição",
+"source": "manual",
+"reviewed": true
+},
+"Connecting...": {
+"pt": "Conectando...",
+"source": "manual",
+"reviewed": true
+},
+"Controls": {
+"pt": "Controles",
+"source": "manual",
+"reviewed": true
+},
+"Cooking": {
+"pt": "Culinária",
+"source": "manual",
+"reviewed": true
+},
+"Duel": {
+"pt": "Duelo",
+"source": "manual",
+"reviewed": true
+},
+"Easy": {
+"pt": "Fácil",
+"source": "manual",
+"reviewed": true
+},
+"Hard": {
+"pt": "Difícil",
+"source": "manual",
+"reviewed": true
+},
+"Medium": {
+"pt": "Médio",
+"source": "manual",
+"reviewed": true
+},
+"High": {
+"pt": "Alto",
+"source": "manual",
+"reviewed": true
+},
+"Low (FXAA)": {
+"pt": "Baixo (FXAA)",
+"source": "manual",
+"reviewed": true
+},
+"Europe": {
+"pt": "Europa",
+"source": "manual",
+"reviewed": true
+},
+"Feast table": {
+"pt": "Mesa de banquete",
+"source": "manual",
+"reviewed": true
+},
+"Fullscreen": {
+"pt": "Tela cheia",
+"source": "manual",
+"reviewed": true
+},
+"Gamepad": {
+"pt": "Controle",
+"source": "manual",
+"reviewed": true
+},
+"Gameplay": {
+"pt": "Jogabilidade",
+"source": "manual",
+"reviewed": true
+},
+"Heard any rumours lately?": {
+"pt": "Ouviu algum boato ultimamente?",
+"source": "manual",
+"reviewed": true
+},
+"Helm": {
+"pt": "Elmo",
+"source": "manual",
+"reviewed": true
+},
+"Helmet looks": {
+"pt": "Visuais de elmo",
+"source": "manual",
+"reviewed": true
+},
+"I agree with that": {
+"pt": "Concordo com isso",
+"source": "manual",
+"reviewed": true
+},
+"I'd like to browse your wares!": {
+"pt": "Quero ver suas mercadorias!",
+"source": "manual",
+"reviewed": true
+},
+"I'd like to sell some fish!": {
+"pt": "Quero vender uns peixes!",
+"source": "manual",
+"reviewed": true
+},
+"Idle": {
+"pt": "Parado",
+"source": "manual",
+"reviewed": true
+},
+"In the journal": {
+"pt": "No diário",
+"source": "manual",
+"reviewed": true
+},
+"Ingredients": {
+"pt": "Ingredientes",
+"source": "manual",
+"reviewed": true
+},
+"Interact to choose world": {
+"pt": "Interaja para escolher o mundo",
+"source": "manual",
+"reviewed": true
+},
+"Leather": {
+"pt": "Couro",
+"source": "manual",
+"reviewed": true
+},
+"Leave the Shop": {
+"pt": "Sair da loja",
+"source": "manual",
+"reviewed": true
+},
+"Left today": {
+"pt": "Restantes hoje",
+"source": "manual",
+"reviewed": true
+},
+"Line 1 (Docked)": {
+"pt": "Linha 1 (Atracada)",
+"source": "manual",
+"reviewed": true
+},
+"Line 1 (In Transit)": {
+"pt": "Linha 1 (Em trânsito)",
+"source": "manual",
+"reviewed": true
+},
+"Magic": {
+"pt": "Magia",
+"source": "manual",
+"reviewed": true
+},
+"Melee": {
+"pt": "Corpo a corpo",
+"source": "manual",
+"reviewed": true
+},
+"Ranged": {
+"pt": "À distância",
+"source": "manual",
+"reviewed": true
+},
+"MAP": {
+"pt": "MAPA",
+"source": "manual",
+"reviewed": true
+},
+"Mask": {
+"pt": "Máscara",
+"source": "manual",
+"reviewed": true
+},
+"No change - your own helmet shows": {
+"pt": "Sem mudança - aparece o seu próprio elmo",
+"source": "manual",
+"reviewed": true
+},
+"No gathering to show": {
+"pt": "Nenhum encontro para mostrar",
+"source": "manual",
+"reviewed": true
+},
+"No gatherings scheduled": {
+"pt": "Nenhum encontro agendado",
+"source": "manual",
+"reviewed": true
+},
+"No meta gatherings have been scheduled.": {
+"pt": "Nenhum meta encontro foi agendado.",
+"source": "manual",
+"reviewed": true
+},
+"No outfits yet. Build a look, name it above and press Save.": {
+"pt": "Nenhum traje ainda. Monte um visual, dê um nome acima e clique em Salvar.",
+"source": "manual",
+"reviewed": true
+},
+"None of its ingredients yet - gather or cook them.": {
+"pt": "Nenhum dos ingredientes ainda - colete ou cozinhe.",
+"source": "manual",
+"reviewed": true
+},
+"Nothing picked": {
+"pt": "Nada escolhido",
+"source": "manual",
+"reviewed": true
+},
+"0 of 1 owned": {
+"pt": "0 de 1 obtidos",
+"source": "manual",
+"reviewed": true
+},
+"0 of 1 saved": {
+"pt": "0 de 1 salvos",
+"source": "manual",
+"reviewed": true
+},
+"Offer resets in": {
+"pt": "A oferta reinicia em",
+"source": "manual",
+"reviewed": true
+},
+"Oh Jan? That big boy is just up the stairs to your right!": {
+"pt": "O Jan? Aquele grandalhão fica logo subindo a escada, à sua direita!",
+"source": "manual",
+"reviewed": true
+},
+"Only your single best fish counts. Cast a line to join.": {
+"pt": "Só o seu melhor peixe conta. Lance a linha para participar.",
+"source": "manual",
+"reviewed": true
+},
+"Outfits": {
+"pt": "Trajes",
+"source": "manual",
+"reviewed": true
+},
+"Outfits and finery are on their way.": {
+"pt": "Trajes e enfeites estão a caminho.",
+"source": "manual",
+"reviewed": true
+},
+"Plate": {
+"pt": "Placas",
+"source": "manual",
+"reviewed": true
+},
+"Plate outfits": {
+"pt": "Trajes de placas",
+"source": "manual",
+"reviewed": true
+},
+"Quit to desktop": {
+"pt": "Sair para a área de trabalho",
+"source": "manual",
+"reviewed": true
+},
+"Quit to main menu": {
+"pt": "Sair para o menu principal",
+"source": "manual",
+"reviewed": true
+},
+"Return to game": {
+"pt": "Voltar ao jogo",
+"source": "manual",
+"reviewed": true
+},
+"Random items": {
+"pt": "Itens aleatórios",
+"source": "manual",
+"reviewed": true
+},
+"Ready to collect!": {
+"pt": "Pronto para coletar!",
+"source": "manual",
+"reviewed": true
+},
+"Rendering": {
+"pt": "Renderização",
+"source": "manual",
+"reviewed": true
+},
+"Reset all": {
+"pt": "Redefinir tudo",
+"source": "manual",
+"reviewed": true
+},
+"Reset to defaults": {
+"pt": "Restaurar o padrão",
+"source": "manual",
+"reviewed": true
+},
+"Salt": {
+"pt": "Sal",
+"source": "manual",
+"reviewed": true
+},
+"Spices": {
+"pt": "Temperos",
+"source": "manual",
+"reviewed": true
+},
+"Save this look as...": {
+"pt": "Salvar este visual como...",
+"source": "manual",
+"reviewed": true
+},
+"Saved outfits": {
+"pt": "Trajes salvos",
+"source": "manual",
+"reviewed": true
+},
+"Search looks...": {
+"pt": "Buscar visuais...",
+"source": "manual",
+"reviewed": true
+},
+"See featured": {
+"pt": "Ver destaques",
+"source": "manual",
+"reviewed": true
+},
+"Small world events can still appear nearby. Use NEARBY EVENT to see their objectives.": {
+"pt": "Eventos pequenos do mundo ainda podem aparecer por perto. Use NEARBY EVENT para ver os objetivos deles.",
+"source": "manual",
+"reviewed": true
+},
+"Someone already owns land here.": {
+"pt": "Alguém já é dono deste terreno.",
+"source": "manual",
+"reviewed": true
+},
+"Soon": {
+"pt": "Em breve",
+"source": "manual",
+"reviewed": true
+},
+"Sorry sorry! I get goin' once the fish come up! What can I do for ya?": {
+"pt": "Desculpa, desculpa! Eu me empolgo quando os peixes aparecem! Em que posso te ajudar?",
+"source": "manual",
+"reviewed": true
+},
+"Swamp": {
+"pt": "Pântano",
+"source": "manual",
+"reviewed": true
+},
+"Teach me about cooking and what it can do for me!": {
+"pt": "Me ensine sobre culinária e o que ela pode fazer por mim!",
+"source": "manual",
+"reviewed": true
+},
+"Thank you for supporting the server!": {
+"pt": "Obrigado por apoiar o servidor!",
+"source": "manual",
+"reviewed": true
+},
+"Thanks for playing while we are under construction!": {
+"pt": "Obrigado por jogar enquanto estamos em construção!",
+"source": "manual",
+"reviewed": true
+},
+"The hive is spilling out of the sand again. Push it back before it reaches the road!": {
+"pt": "A colmeia está transbordando da areia de novo. Empurre-a de volta antes que chegue à estrada!",
+"source": "manual",
+"reviewed": true
+},
+"The races system is not running on this server.": {
+"pt": "O sistema de raças não está ativo neste servidor.",
+"source": "manual",
+"reviewed": true
+},
+"The rest (1 colours)": {
+"pt": "O resto (1 cores)",
+"source": "manual",
+"reviewed": true
+},
+"This tab is not available on this server": {
+"pt": "Esta aba não está disponível neste servidor",
+"source": "manual",
+"reviewed": true
+},
+"Times in your local time": {
+"pt": "Horários no seu fuso",
+"source": "manual",
+"reviewed": true
+},
+"Trade complete!": {
+"pt": "Troca concluída!",
+"source": "manual",
+"reviewed": true
+},
+"Trade request": {
+"pt": "Pedido de troca",
+"source": "manual",
+"reviewed": true
+},
+"Trade started": {
+"pt": "Troca iniciada",
+"source": "manual",
+"reviewed": true
+},
+"Transmog set": {
+"pt": "Conjunto de transmog",
+"source": "manual",
+"reviewed": true
+},
+"Video": {
+"pt": "Vídeo",
+"source": "manual",
+"reviewed": true
+},
+"Wardrobe": {
+"pt": "Guarda-roupa",
+"source": "manual",
+"reviewed": true
+},
+"Weapon look": {
+"pt": "Visual da arma",
+"source": "manual",
+"reviewed": true
+},
+"What you can get": {
+"pt": "O que você pode ganhar",
+"source": "manual",
+"reviewed": true
+},
+"What's the newest SMP Realm?": {
+"pt": "Qual é o reino SMP mais novo?",
+"source": "manual",
+"reviewed": true
+},
+"World portal": {
+"pt": "Portal de mundos",
+"source": "manual",
+"reviewed": true
+},
+"You have 1 of 1": {
+"pt": "Você tem 1 de 1",
+"source": "manual",
+"reviewed": true
+},
+"You need 1 more Any Vegetable and 1 more Any Flowers": {
+"pt": "Você precisa de mais 1 Any Vegetable e mais 1 Any Flowers",
+"source": "manual",
+"reviewed": true
+},
+"You needin' somethin'? Speak up - daylight's burnin!": {
+"pt": "Precisa de alguma coisa? Fala logo - o dia tá passando!",
+"source": "manual",
+"reviewed": true
+},
+"You wear plate - cloth looks show when you wear cloth": {
+"pt": "Você usa placas - os visuais de tecido aparecem quando você usa tecido",
+"source": "manual",
+"reviewed": true
+},
+"Thank you Lyra!": {
+"pt": "Obrigado, Lyra!",
+"source": "manual",
+"reviewed": true
+},
+"That'd be all Magnus! Keep being glorious!": {
+"pt": "Era só isso, Magnus! Continue glorioso!",
+"source": "manual",
+"reviewed": true
 }
 }
