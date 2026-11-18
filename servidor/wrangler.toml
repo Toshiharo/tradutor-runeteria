@@ -6,7 +6,7 @@ compatibility_date = "2025-01-01"
 #   npx wrangler kv namespace create MEMORIA
 [[kv_namespaces]]
 binding = "MEMORIA"
-id = "COLOQUE_AQUI_O_ID_DO_KV"
+id = "643a2c08345340c792de86eea8d47323"
 
 # Segredos (nunca neste arquivo; o repositorio e publico):
 #   npx wrangler secret put DEEPL_KEY     -> chave da API do DeepL (a gratuita termina em ":fx")

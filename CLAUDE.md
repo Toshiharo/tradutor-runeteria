@@ -95,7 +95,8 @@ tecla e número inteiro vizinhos: "530 dano · signature completa"). Valores com
 pixels do jogo — o OCR erra esses ("8.65", "g.6s"). Título e subtítulo de card com cor diferente não viram parágrafo.
 Título de card logo acima de linha que começa com número (`Translator._card_titles`) é nome de skill/item: fica em
 inglês mesmo sendo palavra comum ("Hemorrhage"). Fileira de rótulos com vão grande entre eles (abas do topo que o OCR
-juntou) vira uma caixa por rótulo (`_label_row`), nunca vai para a tradução automática. Memória automática `"v": 4`.
+juntou) vira uma caixa por rótulo (`_label_row`), nunca vai para a tradução automática. Memória automática `"v": 5`
+(`library.MEMORY_VERSION`; subir quando o que foi gravado antes não presta mais: a memória passa na frente da online).
 Nome com etiqueta logo abaixo ("DAMAGE" sobre "[DMG] - PVP & PVE", guilda) fica em inglês até contra a biblioteca.
 Objetivo de missão "Verbo N Item" ("Mine 15 Rock Blocks") traduz só o verbo, com `verbos_de_objetivo` do glossário.
 Trecho que só caberia com letra menor que a do resto da linha, ou que deixaria buraco, troca pela linha inteira (`alt`);
@@ -125,6 +126,9 @@ linhas de continuação; caixas `chat: True` somem do slot quando o mouse sai). 
 Memória compartilhada: `.github/workflows/memoria.yml` roda `tools/baixar_memoria.py` todo dia (segredo
 `TRADUTOR_ADMIN` = ADMIN_TOKEN do servidor) e grava `app/data/compartilhada.json` ({texto protegido: tradução});
 o app sincroniza como a biblioteca e consulta antes do servidor (`online_mt.from_shared`), mesmo offline.
+O servidor aceita texto de qualquer um (código público): `baixar_memoria.good`/`game_text` só deixam entrar texto com
+cara de tela do jogo (sem link, só inglês) e no máximo 500 novos por dia. Endereço do servidor:
+`https://tradutor-runeteria.translator-runeteria.workers.dev`.
 
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura

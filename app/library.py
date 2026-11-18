@@ -33,7 +33,8 @@ def is_upper(text):
     return len(letters) >= 2 and sum(c.isupper() for c in letters) / len(letters) > 0.85
 
 
-MEMORY_VERSION = 4  # memoria automatica gravada antes disto traduzia nomes e cards inteiros: e descartada
+MEMORY_VERSION = 5  # memoria automatica gravada antes disto e descartada (v4: traduzia nomes e cards inteiros;
+                    # v5: guardava chat e traducao offline fraca, que passaria na frente da online)
 
 
 def _tok(t):
