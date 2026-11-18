@@ -17,7 +17,7 @@ import theme as T
 from config import APP_NAME, ERROR_LOG, HYTALE_LOGS, MODEL_DIR, SCREEN_DUMP, USER_DIR
 from library import Library
 from lock import RuneteriaLock
-from pipeline import Translator, tidy_lines
+from pipeline import Translator, chat_split, tidy_lines
 from style import (DESCENDERS, _rgb, add_colors, avail_width, font_px, init_faces, pick_face,
                    region_changed, region_thumb, restyle_spans, screen_diff, split_by_color)
 
@@ -203,6 +203,9 @@ class App:
             self.tg_auto.set(enabled=False)  # so existe no programa instalado
         self.tg_online = self._option(box, "Buscar traduções novas na internet",
                                       cfg["atualizar_pela_internet"], self.set_online)
+        if config.ONLINE_MT_URL:
+            self.tg_mt = self._option(box, "Tradução online (melhor e mais rápida)",
+                                      cfg.get("traducao_online", True), self.set_online_mt)
         tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
 
         # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
@@ -227,6 +230,22 @@ class App:
             text=f"{cfg['atalho_liga_desliga']} liga/desliga  •  {cfg['atalho_esconder']} mostra o original  •  "
                  f"{cfg['atalho_salvar_tela']} salva a tela em texto")
         self.footer.pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(14)))
+
+    def apply_online_mt(self):
+        """Liga/desliga a traducao online (o texto em ingles que nao esta na biblioteca vai para o servidor)."""
+        if self.mt is None:
+            return
+        on = bool(config.ONLINE_MT_URL) and self.cfg.get("traducao_online", True)
+        if on and self.mt.online is None:
+            from online_mt import OnlineMT
+            self.mt.online = OnlineMT(config.ONLINE_MT_URL)
+        elif not on:
+            self.mt.online = None
+
+    def set_online_mt(self, value):
+        self.cfg["traducao_online"] = bool(value)
+        config.save_config(self.cfg)
+        self.apply_online_mt()
 
     def _option(self, parent, text, value, command):
         row = tk.Frame(parent, bg=T.CARD)
@@ -413,6 +432,7 @@ class App:
         try:
             from mt import OfflineTranslator
             self.mt = OfflineTranslator(MODEL_DIR, self.lib.glossary, self.lib.terms)
+            self.apply_online_mt()
         except Exception:
             log_error()
             self.mt = None
@@ -806,6 +826,8 @@ class App:
             if now - sl.get("born", 0) > 2.5:
                 continue
             en = sl["box"]["en"]
+            if chat_split(en):
+                continue  # chat: cada mensagem nova empurra as linhas para cima, nao e texto piscando
             times = [t for t in self._flaky.get(en, ([], 0))[0] if now - t < 20] + [now]
             self._flaky[en] = (times, now + 30 if len(times) >= 3 else 0)
         if len(self._flaky) > 500:

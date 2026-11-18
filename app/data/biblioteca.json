@@ -14048,5 +14048,20 @@
 "pt": "Nível 10 - nível máximo",
 "source": "manual",
 "reviewed": true
+},
+"Husbandry": {
+"pt": "Pecuária",
+"source": "manual",
+"reviewed": true
+},
+"Husbandry Mastery": {
+"pt": "Maestria de Pecuária",
+"source": "manual",
+"reviewed": true
+},
+"Husbandry Level": {
+"pt": "Nível de Pecuária",
+"source": "manual",
+"reviewed": true
 }
 }

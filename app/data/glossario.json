@@ -181,7 +181,8 @@
   "skills": "habilidades",
   "stuns": "atordoa",
   "stunned": "atordoado",
-  "stunning": "atordoando"
+  "stunning": "atordoando",
+  "husbandry": "pecuária"
  },
  "_leia_verbos": "verbos_de_objetivo: verbo no começo de um objetivo de missão, antes da quantidade (\"Mine 15 Rock Blocks\" -> \"Minere 15 Rock Blocks\"). O nome do item fica em inglês.",
  "verbos_de_objetivo": {

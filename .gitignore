@@ -7,3 +7,7 @@ __pycache__/
 *.spec
 tools/icone_previa.png
 docs/
+servidor/node_modules/
+servidor/.wrangler/
+servidor/.dev.vars
+servidor/package-lock.json

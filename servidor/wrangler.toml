@@ -1,0 +1,16 @@
+name = "tradutor-runeteria"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Memoria compartilhada das traducoes. O id sai do comando:
+#   npx wrangler kv namespace create MEMORIA
+[[kv_namespaces]]
+binding = "MEMORIA"
+id = "COLOQUE_AQUI_O_ID_DO_KV"
+
+# Segredos (nunca neste arquivo; o repositorio e publico):
+#   npx wrangler secret put DEEPL_KEY     -> chave da API do DeepL (a gratuita termina em ":fx")
+#   npx wrangler secret put ADMIN_TOKEN   -> senha para baixar a memoria (GET /memoria) e revisar
+# Chave paga do DeepL: troque a URL abaixo para https://api.deepl.com/v2/translate
+[vars]
+DEEPL_URL = "https://api-free.deepl.com/v2/translate"

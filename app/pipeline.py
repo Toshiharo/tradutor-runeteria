@@ -227,6 +227,41 @@ def mostly_untranslated(src, pt, known=()):
     return len(same) >= 2 and len(same) / len(out_words) >= 0.3
 
 
+_CHANNEL = re.compile(r"^[\[(]?[A-Z]{2,4}(-[A-Z0-9]{2,6})?[\])]?$")  # (NA-DRV), [EU], G
+_PT_WORDS = {"que", "não", "nao", "é", "eu", "vc", "você", "voce", "pra", "pro", "tá", "ta", "mano", "sim",
+             "tbm", "também", "tambem", "alguém", "alguem", "com", "isso", "aqui", "como", "uma", "um", "meu",
+             "minha", "vai", "vou", "tem", "ele", "ela", "mas", "porque", "pq", "quem", "onde", "obrigado",
+             "valeu", "kkk", "kkkk", "kkkkk", "oi", "olá", "ola", "bom", "boa", "muito", "mto", "já", "ja",
+             "da", "na", "os", "por", "esse", "essa", "nós", "nos", "vamos", "galera", "aí",
+             "quer", "fazer", "comigo", "contigo", "pode", "posso", "vem", "tô", "kd", "cadê", "cade",
+             "mais", "ainda", "agora", "hoje", "sei", "sou", "foi", "então", "entao", "ninguém", "ninguem",
+             "alguma", "algum", "fala", "falou", "beleza", "blz", "slk", "mds", "nada", "tudo", "ajuda", "preciso",
+             "onde", "fica", "achei", "acho", "estou", "aqui", "lá", "dele", "dela", "gente", "bora"}
+
+
+def chat_split(text):
+    """Linha de chat ("G (NA-DRV) RazeNBlaze420: and then says all carts...") -> (indice da primeira palavra
+    da mensagem, mensagem), ou None. So a mensagem e traduzida: canal e nome ficam com os pixels do jogo."""
+    toks = text.split()
+    for k, t in enumerate(toks[:6]):
+        if len(t) > 1 and t.endswith(":") and k + 2 < len(toks) + 1 and len(toks) - (k + 1) >= 2:
+            name, prefix = t[:-1], toks[:k]
+            nameish = bool(re.search(r"[\d_]", name)) or (name[:1].isupper() and not name.isupper() and
+                                                           any(c.isupper() for c in name[1:]))
+            if any(_CHANNEL.match(p) for p in prefix) or (prefix and nameish) or (nameish and k == 0):
+                return k + 1, " ".join(toks[k + 1:])
+            return None
+    return None
+
+
+def looks_portuguese(text):
+    """Mensagem de chat que ja esta em portugues (o Runeteria tem muito jogador brasileiro): nao traduz."""
+    if re.search(r"[ãõçâêôáéíóú]", text.lower()):
+        return True
+    words = re.findall(r"[a-zà-ú]+", text.lower())
+    return bool(words) and sum(w in _PT_WORDS for w in words) >= max(1, len(words) * 0.25)
+
+
 class Translator:
     """Biblioteca primeiro; o que nao achar vai para a fila da traducao offline (em segundo plano)."""
 
@@ -242,6 +277,7 @@ class Translator:
         self._last_prune = 0.0
         self._composed = {}    # texto -> traducao montada por partes (ou None)
         self._unknown = {}     # palavra -> o modelo de traducao nao conhece (nome inventado)
+        self.chat = {}         # mensagem de chat -> traducao (fica so na memoria do programa)
         if self._mt_ok():
             threading.Thread(target=self._worker, daemon=True).start()
 
@@ -256,13 +292,13 @@ class Translator:
                     items.append(self.q.get_nowait())
                 except queue.Empty:
                     break
-            texts = [t for _, t in items]
+            texts = [t for _, t, _ in items]
             try:
-                outs = self.mt.translate_many(texts, [self.names_in(t) for t in texts])
+                outs = self.mt.translate_many(texts, [self.names_in(t) for t in texts], [k for _, _, k in items])
             except Exception:
                 outs = [None] * len(items)
             known = self._known_words()
-            for (key, text), pt in zip(items, outs):
+            for (key, text, keep_it), pt in zip(items, outs):
                 ok = False
                 try:
                     keep = {w.lower() for n in self.names_in(text) for w in n.split()}
@@ -272,7 +308,12 @@ class Translator:
                     if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
                             and same_numbers and not re.search(r"\bI[O0]\b|\bO[I1]\b", pt)
                             and not mostly_untranslated(text, pt, known | keep)):
-                        self.lib.add_auto(text, pt, "auto-tela")
+                        if keep_it:
+                            self.lib.add_auto(text, pt, "auto-tela")
+                        else:
+                            if len(self.chat) > 400:
+                                self.chat.clear()
+                            self.chat[key] = pt
                         ok = True
                 except Exception:
                     pass
@@ -452,7 +493,18 @@ class Translator:
                 return
             del self.seen[key]
             self.pending.add(key)
-        self.q.put((key, text))
+        self.q.put((key, text, True))
+
+    def _queue_chat(self, text):
+        """Mensagem de chat vai para a fila na hora (sem esperar duas leituras: o chat anda rapido)."""
+        if not self.cfg.get("traduzir_desconhecidos", True) or not self._mt_ok():
+            return
+        key = normalize(text)
+        with self._lock:
+            if not key or key in self.pending or key in self.failed or key in self.chat:
+                return
+            self.pending.add(key)
+        self.q.put((key, text, False))
 
     def _prune(self):
         now = time.monotonic()
@@ -484,6 +536,18 @@ class Translator:
     def _one(self, text, allow_mt=True, parts=True, title=False):
         if title == "name" or self._garbled_name(text):
             return None  # nome com etiqueta embaixo (guilda "DAMAGE" / "[DMG]"): nem a biblioteca traduz
+        chat = chat_split(text) if allow_mt else None
+        if chat:
+            k, msg = chat
+            if looks_portuguese(msg) or not looks_translatable(msg):
+                return None
+            hit = self.lib.lookup(msg, 92)
+            pt, origin = (hit[0], hit[1]) if hit else (self.chat.get(normalize(msg)), "auto")
+            if not pt:
+                self._queue_chat(msg)
+                return None
+            toks = text.split()
+            return " ".join(toks[:k] + [pt]), origin, [(k, len(toks), pt, origin)]
         exact = self.lib.knows_reviewed(text)  # a memoria automatica nao passa na frente do "por partes"
         hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86)) if exact else None
         if hit:

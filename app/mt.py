@@ -120,6 +120,7 @@ class OfflineTranslator:
         self.terms = terms or {}  # termos de jogo com traducao fixa {ingles: portugues}
         self._rules_key = self._rules_cache = None
         self._lock = threading.Lock()
+        self.online = None  # online_mt.OnlineMT: traducao melhor e mais rapida, com a offline de reserva
         try:
             import ctranslate2
             import sentencepiece as spm
@@ -194,6 +195,20 @@ class OfflineTranslator:
         # junta as pecas na mao (como o Argos faz): o sp.decode deixa "▁" sobrando em pecas que ele nao conhece
         return [SPACE_RE.sub(" ", "".join(r.hypotheses[0]).replace("\u2581", " ")).strip() for r in res]
 
+    def _backend(self, prots, flags=None):
+        """Traducao dos textos protegidos: online se der, offline se o servidor nao responder."""
+        if self.online is not None and self.online.available():
+            try:
+                res = self.online.raw(prots, flags)
+                miss = [i for i, r in enumerate(res) if r is None]
+                if miss and self.ok:
+                    for i, r in zip(miss, self._raw([prots[i] for i in miss])):
+                        res[i] = r
+                return res
+            except Exception:
+                pass
+        return self._raw(prots) if self.ok else [None] * len(prots)
+
     def pieces(self, word):
         """Em quantos pedacos o modelo quebra a palavra: palavra inglesa comum = 1 ou 2; nome inventado = 3+."""
         return len(self.sp.encode(word.lower(), out_type=str)) if self.ok else 0
@@ -210,10 +225,12 @@ class OfflineTranslator:
     def translate(self, text, keep=()):
         return self.translate_many([text], [keep])[0]
 
-    def translate_many(self, texts, keeps=None):
-        """Traduz varios textos de uma vez (uma tela nova inteira sai bem mais rapido que um por um)."""
-        if not self.ok:
+    def translate_many(self, texts, keeps=None, keep_flags=None):
+        """Traduz varios textos de uma vez (uma tela nova inteira sai bem mais rapido que um por um).
+        keep_flags: False = nao guardar na memoria online (mensagem de chat)."""
+        if not self.ok and self.online is None:
             return [None] * len(texts)
+        flags_all = keep_flags or [True] * len(texts)
         keeps = keeps or [()] * len(texts)
         out, jobs = [None] * len(texts), []
         for i, (text, keep) in enumerate(zip(texts, keeps)):
@@ -237,7 +254,10 @@ class OfflineTranslator:
             else:
                 jobs.append((i, original, prot, found, fixed))
         if jobs:
-            for (i, original, prot, found, fixed), raw in zip(jobs, self._raw([j[2] for j in jobs])):
+            raws = self._backend([j[2] for j in jobs], [flags_all[j[0]] for j in jobs])
+            for (i, original, prot, found, fixed), raw in zip(jobs, raws):
+                if raw is None:
+                    continue
                 res, complete = self._restore(_agree(raw, found, fixed), found)
                 if not complete:
                     # o modelo "comeu" um termo protegido: traduz os pedacos entre os termos
@@ -246,7 +266,7 @@ class OfflineTranslator:
                         if k % 2:
                             pieces.append(found[int(p)])
                         elif re.search(r"[A-Za-z]{2}", p):
-                            pieces.append(self._raw([p.strip()])[0])
+                            pieces.append(self._backend([p.strip()], [flags_all[i]])[0] or p.strip())
                         else:
                             pieces.append(p)
                     res = " ".join(x.strip() for x in pieces if x.strip())
