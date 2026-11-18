@@ -1,5 +1,5 @@
 """Aparencia da traducao: descobre as cores do texto original e o alinhamento (so PIL, testavel)."""
-from PIL import Image, ImageChops
+from PIL import Image, ImageChops, ImageStat
 
 DESCENDERS = set("gjpqy,;()[]{}|/@$")
 
@@ -187,7 +187,8 @@ FACES = [  # (familia no tkinter, peso no tkinter, arquivo, eixo de peso)
     ("Cormorant", "bold", "Cormorant.ttf", 700),
 ]
 _REF = 200  # tamanho em que as fontes sao medidas
-_faces = []          # [(familia, peso, ImageFont)]
+_INK_REF = 40  # tamanho em que a quantidade de tinta e medida (proporcao basta; menor = mais rapido)
+_faces = []          # [(familia, peso, ImageFont para medir, ImageFont pequena para a tinta)]
 _metrics = {}        # (indice da fonte, texto) -> (topo, base, largura) por pixel de tamanho
 
 
@@ -205,7 +206,13 @@ def init_faces(folder):
                                          for a in axes])
             except Exception:
                 pass
-            _faces.append((family, weight, f))
+            small = ImageFont.truetype(os.path.join(folder, fname), _INK_REF)
+            try:
+                small.set_variation_by_axes([wght if (a.get("name") in (b"Weight", "Weight")) else a["default"]
+                                             for a in small.get_variation_axes()])
+            except Exception:
+                pass
+            _faces.append((family, weight, f, small))
         except Exception:
             continue
     return bool(_faces)
@@ -228,11 +235,11 @@ def _ink_amount(i, text, px):
     per_px2 = _metrics.get(key)
     if per_px2 is None:
         from PIL import ImageDraw
-        f = _faces[i][2]
+        f = _faces[i][3]
         box = f.getbbox(text)
         im = Image.new("L", (max(1, box[2] - box[0]), max(1, box[3] - box[1])), 0)
         ImageDraw.Draw(im).text((-box[0], -box[1]), text, font=f, fill=255)
-        per_px2 = _metrics[key] = sum(im.getdata()) / 255 / (_REF * _REF)
+        per_px2 = _metrics[key] = ImageStat.Stat(im).sum[0] / 255 / (_INK_REF * _INK_REF)
     return per_px2 * px * px
 
 
@@ -251,7 +258,7 @@ def pick_face(text, width, ink_h, ink=None):
     """
     letters = sum(c.isalpha() for c in text)
     cands = {}
-    for i, (family, weight, _) in enumerate(_faces):
+    for i, (family, weight, *_) in enumerate(_faces):
         top, bottom, w = _measure(i, text)
         if bottom - top <= 0:
             continue
@@ -349,3 +356,35 @@ def block_align(lines, tol=None):
         return "left"
     centers = [l["x"] + l["w"] / 2 for l in lines]
     return "center" if max(centers) - min(centers) <= tol * 2 else "left"
+
+
+# ---------- deteccao rapida de mudanca ----------
+def region_thumb(img, x, y, w, h):
+    """Miniatura em cinza da regiao de um texto, para saber depois se o jogo trocou o que estava ali."""
+    box = (max(0, int(x) - 2), max(0, int(y) - 2), min(img.width, int(x + w) + 3), min(img.height, int(y + h) + 3))
+    if box[2] - box[0] < 2 or box[3] - box[1] < 2:
+        return None
+    size = (max(4, min(48, int(w) // 3)), max(3, min(12, int(h) // 2)))
+    return box, img.crop(box).convert("L").resize(size, Image.BILINEAR)
+
+
+def region_changed(img, thumb, limit=14):
+    """True se a regiao mudou de verdade (outro texto, outro menu, menu fechado).
+
+    Compara miniaturas: o cenario 3D se mexendo atras de um painel muda pouco a media; um texto
+    trocado por outro (ou sumindo) muda muito.
+    """
+    if thumb is None:
+        return False
+    box, t = thumb
+    if box[2] > img.width or box[3] > img.height:
+        return True  # a janela mudou de tamanho
+    cur = img.crop(box).convert("L").resize(t.size, Image.BILINEAR)
+    return ImageStat.Stat(ImageChops.difference(cur, t)).mean[0] > limit
+
+
+def screen_diff(a, b):
+    """Diferenca media (0-255) entre duas assinaturas da tela inteira (miniaturas em cinza)."""
+    if a is None or b is None or a.size != b.size:
+        return 255.0
+    return ImageStat.Stat(ImageChops.difference(a, b)).mean[0]

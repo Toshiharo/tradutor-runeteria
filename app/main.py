@@ -18,7 +18,8 @@ from config import APP_NAME, ERROR_LOG, HYTALE_LOGS, MODEL_DIR, SCREEN_DUMP, USE
 from library import Library
 from lock import RuneteriaLock
 from pipeline import Translator, tidy_lines
-from style import DESCENDERS, _rgb, add_colors, avail_width, font_px, init_faces, pick_face
+from style import (DESCENDERS, _rgb, add_colors, avail_width, font_px, init_faces, pick_face,
+                   region_changed, region_thumb, screen_diff)
 
 KEY_COLOR = "#ff00fe"  # cor "invisivel" do overlay
 
@@ -359,16 +360,34 @@ class App:
 
     # ---------- loop de captura (thread) ----------
     def worker(self):
+        """Loop de captura.
+
+        Roda a cada ~0,1 s, mas o OCR (caro) so roda quando precisa:
+        - a cada passada, confere so a regiao de cada traducao na tela: se o jogo trocou o texto ali
+          (mudou de menu, fechou a janela), aquela traducao sai NA HORA, sem esperar o OCR;
+        - quando a tela muda de verdade, o OCR roda assim que ela para de mudar (fim da animacao);
+        - fora isso, uma releitura a cada "intervalo_segundos" pega textos novos e traducoes prontas.
+        """
         import mss
         from PIL import Image
         sct = (getattr(mss, "MSS", None) or mss.mss)()  # mss 10 renomeou mss.mss para mss.MSS
+        TICK = 0.15          # segundos entre capturas (cada passada sem OCR custa ~20 ms)
+        BIG = 4.0            # diferenca media da tela que conta como "mudou de verdade"
+        STABLE = 2.5         # abaixo disso entre duas capturas seguidas = parou de mudar
+        MAX_WAIT = 0.5       # traducao tirada da tela e animacao longa: le assim mesmo depois disso
+        MIN_GAP = 0.3        # nunca dois OCRs em menos que isso
         hwnd, hwnd_time = None, 0
-        last_sig = None
         last_status = None
         hidden = False
         was_active = False
+        prev_sig = ocr_sig = None
+        last_ocr = 0.0
+        urgent_since = None  # quando a tela mudou e ainda nao foi relida
+        removed = False      # tirou traducao da tela e ainda nao releu (ai a pressa e maior)
+        shown = []           # [(caixa, miniatura da regiao)] do que esta desenhado agora
+        last_rect = None
         while True:
-            time.sleep(self.cfg["intervalo_segundos"])
+            time.sleep(TICK)
             try:
                 self.lib.save(force=False)  # grava a memoria automatica aos poucos (no maximo a cada 10 s)
                 if not hwnd or time.time() - hwnd_time > 3:
@@ -389,22 +408,60 @@ class App:
                     if not hidden:
                         self.ui_q.put(("hide",))
                         hidden = True
-                    last_sig = None
+                    prev_sig = ocr_sig = None
+                    shown = []
                     continue
                 hidden = False
                 rect = self.w.client_rect(hwnd)
                 if not rect:
                     continue
                 x, y, w, h = rect
-                if not self.capture_safe and self.ov_shown:
-                    self.hidden_for_capture.clear()
-                    self.ui_q.put(("hide",))
-                    self.hidden_for_capture.wait(0.4)
-                    time.sleep(0.03)
+                if rect != last_rect:  # janela mexeu ou mudou de tamanho: tudo que esta desenhado vale menos
+                    shown, ocr_sig, last_rect = [], None, rect
+                    urgent_since = urgent_since or time.monotonic()
+                now = time.monotonic()
+                periodic = now - last_ocr >= self.cfg["intervalo_segundos"]
+                if not self.capture_safe:
+                    # Windows antigo: o overlay aparece na captura, entao tem que sumir antes de capturar.
+                    # Nesse caso nao da para fazer a conferencia rapida; fica so a releitura periodica.
+                    if not periodic:
+                        continue
+                    if self.ov_shown:
+                        self.hidden_for_capture.clear()
+                        self.ui_q.put(("hide",))
+                        self.hidden_for_capture.wait(0.4)
+                        time.sleep(0.03)
                 shot = sct.grab({"left": x, "top": y, "width": w, "height": h})
                 img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
-                sig = img.resize((96, 54)).convert("L").tobytes()
-                if sig == last_sig:
+                sig = img.reduce(20).convert("L")  # assinatura da tela inteira (~1 ms)
+
+                # 1) conferencia rapida: tira na hora o que ficou em cima de texto que ja nao existe
+                if shown and self.capture_safe:
+                    keep = [(b, t) for b, t in shown if not region_changed(img, t)]
+                    if len(keep) <= len(shown) * 0.4:
+                        keep = []  # a maioria mudou de uma vez: o menu fechou ou trocou inteiro
+                    if len(keep) != len(shown):
+                        shown = keep
+                        self.ui_q.put(("boxes", rect, [b for b, _ in keep]))
+                        urgent_since, removed = urgent_since or now, True
+
+                # 2) quando reler a tela
+                moving = screen_diff(sig, prev_sig)
+                prev_sig = sig
+                if screen_diff(sig, ocr_sig) > BIG:
+                    urgent_since = urgent_since or now
+                if urgent_since is not None:
+                    # le quando a tela parar de mexer. Se so o cenario 3D esta se mexendo (andando pelo
+                    # mundo, sem menu), nao para nunca: ai fica na releitura periodica de sempre, para nao
+                    # gastar processador; com traducao recem tirada da tela, le de qualquer jeito em 0,5 s
+                    due = moving < STABLE or (removed and now - urgent_since >= MAX_WAIT) or periodic
+                else:
+                    due = periodic
+                due = due and now - last_ocr >= MIN_GAP
+                if not due:
+                    continue
+
+                if urgent_since is None and screen_diff(sig, ocr_sig) == 0 and self.last_lines:
                     boxes = self.translator.boxes(self.last_lines)  # pega traducoes que acabaram de ficar prontas
                 else:
                     lines = tidy_lines(self.ocr.recognize(img, self.cfg["escala_ocr"]))
@@ -412,7 +469,9 @@ class App:
                         add_colors(img, lines)
                     self.last_lines = lines
                     boxes = self.translator.boxes(lines)
-                    last_sig = sig
+                    ocr_sig = sig
+                last_ocr, urgent_since, removed = now, None, False
+                shown = [(b, region_thumb(img, b["x"], b["y"], b["w"], b["h"])) for b in boxes]
                 self.ui_q.put(("boxes", rect, boxes))
             except Exception:
                 log_error()

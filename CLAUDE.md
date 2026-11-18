@@ -23,7 +23,10 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
 - A tradução automática (Argos) é fraca em rótulos curtos e puxa para pt-PT; o que importa deve ir para `biblioteca.json`.
 
 ## Arquitetura (`app/`)
-- `main.py` — janela de controle tkinter + overlay transparente click-through + thread de captura (mss) a cada ~0,8 s.
+- `main.py` — janela de controle tkinter + overlay transparente click-through + thread de captura (mss).
+  `worker` captura a cada 0,15 s, mas só faz OCR quando precisa: confere a região de cada tradução desenhada
+  (`style.region_thumb`/`region_changed`) e tira na hora a que ficou em cima de texto que mudou (troca de menu ~0,03 s,
+  menu fechado ~0,1 s); relê assim que a tela para de mexer; senão relê a cada `intervalo_segundos` (0,8 s).
   Atalhos globais F8 liga/desliga, F9 mostra original, F10 salva `ultima_tela.txt`.
 - `lock.py` — lê incrementalmente o `*_client.log` mais recente em `%APPDATA%\Hytale\UserData\Logs`.
   Classe `Session`: "Direct connecting to multiplayer server at X" define a sessão; "Referral: A -> B" e reconexões
