@@ -43,8 +43,8 @@ def is_value_token(tok):
         return True
     if len(t) == 1 and t.isupper():
         return True  # tecla de atalho
-    if t in ("s", "m", "h", "d", "x", "%"):
-        return True  # unidade que o OCR separou do numero ("7.7 s")
+    if t in ("s", "m", "h", "d", "x", "%", "c", "g"):
+        return True  # unidade que o OCR separou do numero ("7.7 s"), ou moeda escrita separada ("15 c", "10 g")
     t = t.rstrip(".,„…·'\"")  # reticencias lidas errado pelo OCR ("32.„")
     if not t:
         return True

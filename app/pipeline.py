@@ -244,7 +244,21 @@ _PT_WORDS = {"que", "não", "nao", "é", "eu", "vc", "você", "voce", "pra", "pr
 
 CHAT_ZONE_KEEP = 1800.0  # segundos que a posicao do chat fica lembrada sem ver uma mensagem "canal nome:"
 # comeco de mensagem que chat_split nao reconhece (nome todo minusculo, etiqueta de rank na frente)
+_CHAT_NOTICE = re.compile(r"\bhas (?:joined|left)\b|^Welcome \S+ to |^\[|^Announcement\b")  # aviso do servidor no chat
 _OTHER_SPEAKER = re.compile(r"^(?:\[[^\]]+\]\s+)?[^\s:]{2,}:\s+\S")
+# jogador entrando/saindo ("zuul has joined [NA] NA Hub.", "Kwaxu has joined", "Welcome zuul to Runeteria!"):
+# nunca e traduzido, em lugar nenhum - nem com a opcao do chat ligada e o mouse em cima. Passa o tempo todo, nao
+# diz nada que precise de traducao e era o que mais sujava a tela. "X joined the guild" (historico da guilda,
+# texto de tela) nao entra aqui.
+_LOGIN_NOTICE = re.compile(r"\bhas (?:joined|left|connected|disconnected)\s*(?:$|[\[(.!]|.*\bHub\b)"
+                           r"|\bjoined \[|^Welcome \S+ to Runeteria"
+                           # o nome do servidor do aviso, lido sozinho (ele e em negrito e sai como outro pedaco):
+                           # "[NA] NA Hub.", "[NAI NA Hub", "[EU] EU Hub."
+                           r"|^\[[A-Za-z]{2,4}\]?\s+[A-Za-z]{2,4}[ -]Hub\b", re.I)
+
+
+def login_notice(text):
+    return bool(_LOGIN_NOTICE.search(text.strip()))
 
 
 def chat_split(text):
@@ -260,6 +274,41 @@ def chat_split(text):
                 return k + 1, " ".join(toks[k + 1:])
             return None
     return None
+
+
+# preco do Runeteria (cobre/prata/ouro: "15c", "1s 50c"), tambem como o leitor de tela costuma errar:
+# 5 -> S, 0 -> O, 1 -> I/l ("50c" lido "soc"/"SOC", "1s" lido "Is")
+_NUM_TOK = r"[0-9SsOoIlZB]{1,4}"
+_PRICE_TOK = _NUM_TOK + r"\s?[csgCSG]"   # junto ("15c") ou separado ("15 c", "10 g")
+_PRICE_LINE = re.compile(r"^(?:%s\s+){1,3}(per|each)(?:\s+\S+)?$" % _PRICE_TOK, re.I)
+_VALUES_LINE = re.compile(r"^%s(?:\s+%s){0,3}$" % (_PRICE_TOK, _PRICE_TOK))
+_LEVEL_LINE = re.compile(r"^(?:lv|lvl|nv)\.?\s?(%s)$" % _NUM_TOK, re.I)
+
+
+def value_line(text):
+    """Linha que e so valor do jogo: precos ("15c", "15 c", "1s 50c", "10 g") ou nivel com numero lido errado
+    ("Lv IO"). Nao ha o que traduzir, e o leitor de tela erra esses numeros ("soc", "Is SOC"): a linha fica
+    com os pixels do jogo, sem ir para a traducao automatica. "Lv 10" lido certo segue para a biblioteca."""
+    t = text.strip()
+    if _VALUES_LINE.match(t):
+        return True
+    m = _LEVEL_LINE.match(t)
+    return bool(m) and not m.group(1).isdigit()
+
+
+def _price_line(text):
+    """Linha de preco ("50c per 100", "1s 50c per 100", "5c each"): traduz so "per"/"each". O valor fica com
+    os pixels do jogo - o leitor de tela erra esses ("soc per 100") e a traducao redesenhava o erro por cima
+    do preco certo. Devolve (traducao, origem, trechos) ou None."""
+    m = _PRICE_LINE.match(text.strip())
+    if not m:
+        return None
+    toks = text.split()
+    k = next(i for i, t in enumerate(toks) if t.lower() == m.group(1).lower())
+    pt = {"per": "por", "each": "cada"}[toks[k].lower()]
+    if toks[k].isupper():
+        pt = pt.upper()
+    return " ".join(toks[:k] + [pt] + toks[k + 1:]), "manual", [(k, k + 1, pt, "manual")]
 
 
 def looks_portuguese(text):
@@ -575,7 +624,7 @@ class Translator:
             if not nameish:
                 continue
             hit = self.lib.lookup(rest, 100)
-            if not hit or hit[0] == rest:
+            if not hit or hit[0].strip(" .!") == rest.strip(" .!"):
                 return None
             return " ".join(head + [hit[0]]), hit[1], [(k, len(toks), hit[0], hit[1])]
         return None
@@ -602,6 +651,8 @@ class Translator:
         if title == "name" or self._garbled_name(text):
             return None  # nome com etiqueta embaixo (guilda "DAMAGE" / "[DMG]"): nem a biblioteca traduz
         chat = chat_split(text) if allow_mt else None
+        if chat and not self.cfg.get("traduzir_chat", False):
+            return None
         if chat:
             k, msg = chat
             pt, origin = self._slang(msg), "manual"  # "ty", "lol gg": pronto, sem fila e sem cota
@@ -615,6 +666,11 @@ class Translator:
                 return None
             toks = text.split()
             return " ".join(toks[:k] + [pt]), origin, [(k, len(toks), pt, origin)]
+        if value_line(text) or login_notice(text):
+            return None
+        price = _price_line(text)
+        if price:
+            return price
         named = self._name_then_phrase(text)
         if named:
             return named
@@ -655,16 +711,20 @@ class Translator:
         self._queue_chat(msg)
         return None
 
-    @staticmethod
-    def _chat_blocks(lines):
+    def _chat_blocks(self, lines):
         """Mensagens do chat: a linha com "canal nome:" e as linhas logo abaixo em que a mensagem continua.
         Separadas antes de montar paragrafos: com a mesma cor e altura, o chat inteiro virava um paragrafo
         so, que ia junto para a traducao automatica ("Minnie420: ... G (NA-HUB) Skyzzl: ...")."""
         rows = sorted(lines, key=lambda l: (l["y"], l["x"]))
         blocks, used = [], set()
+        view = getattr(self, "view", None)
         for i, ln in enumerate(rows):
             if id(ln) in used or not chat_split(ln["text"]):
                 continue
+            # a mensagem so continua na linha de baixo se a de cima foi ate perto da borda do chat (quebra de
+            # linha). Borda: pela altura da janela; sem ela, pela linha mais comprida da coluna
+            col = [l["x"] + l["w"] for l in rows if abs(l["x"] - ln["x"]) <= ln["h"] * 3]
+            edge = view[1] * 0.39 if view else max(col) * 0.8
             blk = [ln]
             used.add(id(ln))
             for nx in rows[i + 1:]:
@@ -675,8 +735,9 @@ class Translator:
                 if (id(nx) in used or gap < -last["h"] * 0.3 or chat_split(nx["text"])
                         or abs(nx["x"] - ln["x"]) > ln["h"] * 3 or not 0.75 < nx["h"] / ln["h"] < 1.33):
                     continue
-                if _OTHER_SPEAKER.match(nx["text"]):
-                    break  # "jenin: ...", "[Copper] Semedar: ...": outra pessoa falando, nao e continuacao
+                if (_OTHER_SPEAKER.match(nx["text"]) or _CHAT_NOTICE.search(nx["text"])
+                        or last["x"] + last["w"] < edge):
+                    break  # outra pessoa falando ("jenin: ..."), aviso ("zuul has joined") ou linha curta em cima
                 blk.append(nx)
                 used.add(id(nx))
             blocks.append(blk)
@@ -711,6 +772,12 @@ class Translator:
             members = [l for b in blocks for l in b]
         elif zone and self.pointer is None and now - zone["t"] < CHAT_ZONE_KEEP:
             h, x, members = zone["h"], zone["x"], []
+        elif zone and region and now - zone["t"] < CHAT_ZONE_KEEP:
+            # chat aberto (cursor visivel) sem nenhuma mensagem "canal nome:" na tela: so entra a linha que
+            # tem cara de fala ("jenin: rip", "[Copper] Semedar: ...") e esta na margem onde o chat estava.
+            # Mais que isso nao da para afirmar - pode haver um menu aberto por cima desse lugar
+            return [l for l in lines if id(l) not in used and region(l) and _OTHER_SPEAKER.match(l["text"])
+                    and abs(l["x"] - zone["x"]) <= zone["h"] and 0.75 < l["h"] / zone["h"] < 1.33]
         else:
             return []
         cand = [l for l in lines if id(l) not in used and (region is None or region(l))
@@ -744,6 +811,8 @@ class Translator:
         px, py = self.pointer
         x0 = min(l["x"] for l in blk) - blk[0]["h"]
         x1 = max(l["x"] + l["w"] for l in blk) + blk[0]["h"] * 2
+        if self.view:  # vale a linha inteira da caixa do chat: quem le para o mouse em qualquer ponto dela,
+            x0, x1 = min(x0, 0), max(x1, self.view[1] * 0.5)  # nao so em cima das letras de uma linha curta
         y0 = blk[0]["y"] - blk[0]["h"] * 0.4
         y1 = max(l["y"] + l["h"] for l in blk) + blk[0]["h"] * 0.4
         return x0 <= px <= x1 and y0 <= py <= y1
@@ -756,8 +825,19 @@ class Translator:
         chat_blocks, chat_ids = self._chat_blocks(lines)
         chat_loose = self._chat_zone_lines(lines, chat_blocks, chat_ids)  # na coluna do chat, sem "canal nome:"
         chat_ids = chat_ids | {id(l) for l in chat_loose}
-        if chat_ids:
-            lines = [l for l in lines if id(l) not in chat_ids]
+        # aviso de jogador entrando/saindo nunca e traduzido, esteja onde estiver na tela
+        blocked = [l for l in lines if id(l) in chat_ids or login_notice(l["text"])]
+
+        def same_row(l):
+            # pedaco da mesma linha de chat/aviso que o leitor separou (muda a cor ou o negrito no meio:
+            # "OneTimeACraft has joined" + "[NA] NA Hub."): colado na horizontal e na mesma altura
+            for b in blocked:
+                over = min(l["y"] + l["h"], b["y"] + b["h"]) - max(l["y"], b["y"])
+                gap = max(l["x"] - (b["x"] + b["w"]), b["x"] - (l["x"] + l["w"]))
+                if over >= min(l["h"], b["h"]) * 0.5 and gap <= max(l["h"], b["h"]) * 3:
+                    return True
+            return False
+        lines = [l for l in lines if not any(l is b for b in blocked) and not same_row(l)]
 
         def box(geo, first, pt, origin, en, align, n_lines):
             d = {**{k: geo[k] for k in "xywh"}, "line_h": first["h"], "pt": pt, "origin": origin,
@@ -779,8 +859,9 @@ class Translator:
 
         # chat: so a mensagem sob o cursor, e so com o cursor visivel (chat aberto). Andando pelo mundo o
         # chat fica em ingles e nao gasta nada; quem quer ler passa o mouse em cima
+        chat_on = self.cfg.get("traduzir_chat", False)  # desligado: nada do chat e traduzido nem enviado
         for blk in chat_blocks:
-            if not self._hovered(blk):
+            if not chat_on or not self._hovered(blk):
                 continue
             k, first_msg = chat_split(blk[0]["text"])
             msg = " ".join([first_msg] + [l["text"] for l in blk[1:]])
@@ -806,9 +887,9 @@ class Translator:
             d["chat"] = True
             out.append(d)
         for ln in chat_loose:  # aviso ou pedaco de mensagem na coluna do chat: mesma regra, so sob o mouse
-            if not self._hovered([ln]):
+            if not chat_on or not self._hovered([ln]) or login_notice(ln["text"]):
                 continue
-            r = self._name_then_phrase(ln["text"])  # "Kwaxu has joined": so a frase, o nome fica
+            r = self._name_then_phrase(ln["text"])  # nome + frase da biblioteca: so a frase
             pieces = self._span_boxes(ln, r, box, "left") if r else None
             if not pieces:
                 r = self._chat_pt(ln["text"])  # vai como chat: nunca para a memoria compartilhada
@@ -816,6 +897,11 @@ class Translator:
             for p in pieces:
                 p["chat"] = True
             out.extend(pieces)
+        if self.view:  # a traducao pode crescer ate a borda direita da caixa do chat (o fundo ali e translucido,
+            for p in out:  # entao o espaco livre medido na tela da zero e a frase quebrava em cima da linha de baixo)
+                if p.get("chat"):
+                    p["room_r"] = max(p.get("room_r", 0), self.view[1] * 0.485 - (p["x"] + p["w"]))
+                    p.setdefault("room_l", 0)
 
         titles = self._card_titles(lines)
         for b in group_blocks(lines):

@@ -92,7 +92,7 @@ class App:
             self.root.iconbitmap(config.ICON_FILE)
         except Exception:
             pass
-        self.game_state = (None, False, False)  # (descricao do servidor, ativo, janela achada)
+        self.game_state = (None, False, False, False)  # (descricao do servidor, ativo, janela achada, no Runeteria)
         self.new_version = None
         self._build_window()
         if "--minimizado" in sys.argv:
@@ -207,6 +207,8 @@ class App:
         if config.ONLINE_MT_URL:
             self.tg_mt = self._option(box, "Tradução online (melhor e mais rápida)",
                                       cfg.get("traducao_online", True), self.set_online_mt)
+        self.tg_chat = self._option(box, "Traduzir o chat (não recomendado)",
+                                    cfg.get("traduzir_chat", False), self.set_chat)
         tk.Frame(box, bg=T.CARD, height=T.S(8)).pack()
 
         # um botao so: baixa as traducoes corrigidas e confere se saiu versao nova do programa
@@ -223,9 +225,10 @@ class App:
         inner.pack(fill="both", expand=True, padx=1, pady=1)
         self.lbl_update = tk.Label(inner, text="", font=T.font("label"), fg=T.GOLD_HI, bg=T.CARD)
         self.lbl_update.pack(side="left", padx=T.S(12), pady=T.S(8))
-        b = T.RButton(inner, "Baixar", self.open_download, kind="primary", height=30, bg=T.CARD, small=True)
-        b.config(width=T.S(90))
+        b = T.RButton(inner, "Atualizar", self.start_update, kind="primary", height=30, bg=T.CARD, small=True)
+        b.config(width=T.S(104))
         b.pack(side="right", padx=T.S(10), pady=T.S(6))
+        self.btn_update = b
         self.footer = tk.Label(
             panel, font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL, justify="left", anchor="w",
             text=f"{cfg['atalho_liga_desliga']} liga/desliga  •  {cfg['atalho_esconder']} mostra o original  •  "
@@ -251,6 +254,14 @@ class App:
         elif not on:
             self.mt.online = None
 
+    def set_chat(self, value):
+        self.cfg["traduzir_chat"] = bool(value)  # o laco de captura e o Translator leem do mesmo cfg
+        config.save_config(self.cfg)
+        # nao recomendado: o chat sobe o tempo todo e so da para traduzir a mensagem em que o mouse esta
+        self.lbl_info.config(text="Chat: a tradução é parcial. Abra o chat e passe o mouse em cima de uma mensagem "
+                                  "para traduzir só ela. Como o chat sobe o tempo todo, nem tudo é traduzido."
+                             if value else "")
+
     def set_online_mt(self, value):
         self.cfg["traducao_online"] = bool(value)
         config.save_config(self.cfg)
@@ -266,7 +277,7 @@ class App:
 
     def refresh_status(self):
         """Atualiza a frase de estado e as linhas de preparacao. Sempre na thread da interface."""
-        desc, active, has_win = self.game_state
+        desc, active, has_win, in_rt = self.game_state
         # leitor de tela (OCR do Windows)
         if self.ocr is None:
             if self.ocr_error:
@@ -292,8 +303,10 @@ class App:
         # jogo
         if not has_win:
             self.row_game.set("off", "Fechado")
-        elif active:
+        elif in_rt:
             self.row_game.set("ok", "No Runeteria")
+        elif active:
+            self.row_game.set("ok", "Aberto")
         else:
             self.row_game.set("warn", "Fora do Runeteria")
         # frase principal: o proximo passo para a pessoa
@@ -306,7 +319,7 @@ class App:
         elif not ready:
             state, color, hint = "Preparando...", T.YELLOW, "Carregando o tradutor. Leva alguns segundos."
         elif not has_win:
-            state, color, hint = "Abra o Hytale", T.YELLOW, "O tradutor liga sozinho quando você entrar no Runeteria."
+            state, color, hint = "Abra o Hytale", T.YELLOW, "O tradutor liga sozinho quando o jogo abrir."
         elif not active:
             state, color = "Entre no Runeteria", T.YELLOW
             hint = "Conecte em play.runeteria.com. Em outros servidores o tradutor fica parado."
@@ -336,6 +349,54 @@ class App:
         import webbrowser
         from online import RELEASES_PAGE
         webbrowser.open(RELEASES_PAGE)
+
+    # ---------- atualizar o programa sem sair dele ----------
+    def start_update(self):
+        """Botao "Atualizar": baixa o instalador da versao nova, instala por cima e reabre o tradutor.
+        Rodando pelo codigo-fonte nao ha o que instalar: abre a pagina de download."""
+        if not config.FROZEN:
+            self.open_download()
+            return
+        self.btn_update.set(text="Baixando...", enabled=False)
+        threading.Thread(target=self._download_update, daemon=True).start()
+
+    def _download_update(self):
+        try:
+            import online
+            info = online.latest_installer()
+            if not info:
+                raise OSError("sem instalador na ultima versao")
+            self.ui_q.put(("info", f"Baixando a versão {info['version']}... 0%"))
+            path = online.download_installer(
+                info, lambda p: self.ui_q.put(("info", f"Baixando a versão {info['version']}... {p}%")))
+            self.ui_q.put(("install", path))
+        except Exception:
+            log_error()
+            self.ui_q.put(("update_failed",))
+
+    def install_update(self, installer):
+        """Fecha o tradutor, roda o instalador sem perguntas (ele mostra so a barra de progresso) e abre o
+        tradutor de novo. Quem faz isso e um script a parte, porque o programa nao pode se trocar aberto."""
+        import subprocess
+        import tempfile
+        script = os.path.join(tempfile.gettempdir(), "TradutorRuneteria-Atualizar.cmd")
+        try:
+            with open(script, "w", encoding="utf-8", newline="\r\n") as f:
+                f.write("@echo off\n"
+                        "chcp 65001 >nul\n"
+                        "ping -n 3 127.0.0.1 >nul\n"                      # espera o tradutor fechar
+                        f'"{installer}" /SILENT /SUPPRESSMSGBOXES /NORESTART\n'
+                        f'start "" "{sys.executable}"\n'
+                        f'del "{installer}" >nul 2>nul\n'
+                        'del "%~f0" >nul 2>nul\n')
+            subprocess.Popen(["cmd", "/c", script], close_fds=True,
+                             creationflags=0x08000000 | 0x00000200)   # sem janela, grupo proprio
+        except Exception:
+            log_error()
+            self.ui_q.put(("update_failed",))
+            return False
+        self.quit()
+        return True
 
     def install_ocr(self):
         self.row_ocr.action(None, None)
@@ -408,7 +469,7 @@ class App:
             v = online.newer_version()
             if v:
                 self.ui_q.put(("update", v))
-                msg = f"Saiu a versão {v} do programa. Clique em Baixar para instalar."
+                msg = f"Saiu a versão {v} do programa. Clique em Atualizar: ele baixa e instala sozinho."
             elif online.reachable():
                 msg = "Traduções atualizadas." if got else "Você já tem as traduções mais recentes."
             else:
@@ -524,14 +585,18 @@ class App:
                 self.lib.save(force=False)  # grava a memoria automatica aos poucos (no maximo a cada 10 s)
                 if not hwnd or time.time() - hwnd_time > 3:
                     hwnd, hwnd_time = self.w.find_hytale_window(), time.time()
-                active = self.lock.active()
-                status = ("server", self.lock.describe(), active, bool(hwnd))
+                # o tradutor funciona com o jogo aberto, em qualquer lugar: a conferencia "esta no Runeteria"
+                # (pelo log do Hytale) deixava gente de fora quando o log nao era achado ou lido. Ela so volta
+                # com "so_no_runeteria": true no config.json; aqui serve para a janela e para procurar telas novas
+                in_rt = self.lock.active()
+                active = in_rt or not self.cfg.get("so_no_runeteria", False)
+                status = ("server", self.lock.describe(), active, bool(hwnd), in_rt)
                 if (status, self.enabled) != last_status:  # so mexe na interface quando algo muda
                     self.ui_q.put(status)
                     last_status = (status, self.enabled)
-                if active and not was_active:
+                if in_rt and not was_active:
                     self.run_updater_async()  # acabou de entrar: confere se veio tela nova
-                was_active = active
+                was_active = in_rt
                 if not self.enabled or self.translator is None or self.ocr is None or \
                         not hwnd or not active or self.w.is_minimized(hwnd) or \
                         not self.w.is_foreground(hwnd, (self.ov_hwnd,)):
@@ -608,12 +673,15 @@ class App:
 
                 # cursor: com o chat aberto o mouse aparece; a mensagem embaixo dele e traduzida. Mexeu de
                 # mensagem (ou abriu/fechou o chat): remonta as caixas da ultima leitura, sem OCR (~10 ms)
-                cur = self.w.cursor_pos() if self.cfg.get("chat_ao_passar_o_mouse", True) else None
+                # o cursor e lido sempre (sem ele o tradutor sabe que nao ha menu aberto e ignora a regiao do
+                # chat); a opcao "traduzir_chat" so decide se a mensagem sob o mouse e traduzida
+                cur = self.w.cursor_pos()
+                chat_on = bool(self.cfg.get("traduzir_chat", False))
                 ptr = (cur[0] - x, cur[1] - y) if cur and 0 <= cur[0] - x < w and 0 <= cur[1] - y < h else None
                 self.translator.pointer = ptr
                 self.translator.view = (w, h)
                 ptr_moved = (ptr is None) != (last_ptr is None) or (
-                    ptr and last_ptr and abs(ptr[0] - last_ptr[0]) + abs(ptr[1] - last_ptr[1]) > 6)
+                    chat_on and ptr and last_ptr and abs(ptr[0] - last_ptr[0]) + abs(ptr[1] - last_ptr[1]) > 6)
                 if ptr_moved:
                     last_ptr, ptr_dirty = ptr, True
 
@@ -748,6 +816,16 @@ class App:
                     self.refresh_status()
                 elif kind == "checked":
                     self.btn_check.set(text="Verificar atualizações", enabled=True)
+                elif kind == "install":
+                    self.lbl_info.config(text="Instalando a versão nova. O tradutor vai fechar e abrir de novo.")
+                    self.root.update_idletasks()
+                    if self.install_update(msg[1]):
+                        return  # a janela ja foi fechada
+                elif kind == "update_failed":
+                    self.btn_update.set(text="Atualizar", enabled=True)
+                    self.lbl_info.config(text="Não deu para baixar a versão nova agora. Abri a página de download: "
+                                              "baixe o instalador por lá e instale por cima.")
+                    self.open_download()
                 elif kind == "update":
                     self.lbl_update.config(text=f"Versão {msg[1]} disponível")
                     self.update_box.pack(fill="x", padx=T.S(16), pady=(T.S(10), 0), before=self.footer)
@@ -801,7 +879,8 @@ class App:
         self._note_drops([sl for sl in self._slots if sl not in slots])
         # chat: a traducao some quando o mouse sai da mensagem (a leitura nova nao a traz mais)
         slots = [sl for sl in slots if not sl["box"].get("chat")
-                 or any(b.get("chat") and _overlap(b, sl["box"]) for b in boxes)]
+                 or any(b.get("chat") and _overlap(b, sl["box"])
+                        and abs(b["y"] - sl["box"]["y"]) < sl["box"].get("line_h", b["h"]) * 0.5 for b in boxes)]
         used = set()
         now = time.monotonic()
         for b in boxes:

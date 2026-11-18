@@ -92,6 +92,64 @@ def _parse(version):
     return tuple(out)
 
 
+INSTALLER_NAME = "TradutorRuneteria-Instalar.exe"
+DOWNLOAD_PREFIX = f"https://github.com/{REPO}/releases/download/"
+MAX_INSTALLER = 400 * 1024 * 1024
+
+
+def latest_installer():
+    """Instalador da ultima versao publicada, se for mais nova que esta:
+    {"version", "url", "size", "sha256" (ou None)}; senao None."""
+    try:
+        raw, _ = _get(LATEST)
+        rel = json.loads(raw.decode("utf-8"))
+        tag = rel.get("tag_name") or ""
+        if not tag or _parse(tag) <= _parse(APP_VERSION):
+            return None
+        for a in rel.get("assets") or []:
+            url, size = a.get("browser_download_url") or "", a.get("size") or 0
+            # so o instalador do proprio repositorio, pelo endereco oficial de download do GitHub
+            if a.get("name") == INSTALLER_NAME and url.startswith(DOWNLOAD_PREFIX) and 0 < size <= MAX_INSTALLER:
+                digest = a.get("digest") or ""
+                return {"version": tag.lstrip("vV"), "url": url, "size": size,
+                        "sha256": digest[7:].lower() if digest.startswith("sha256:") else None}
+    except Exception:
+        pass
+    return None
+
+
+def download_installer(info, progress=None):
+    """Baixa o instalador para a pasta temporaria e confere (tamanho, e o sha256 quando o GitHub informa).
+    Devolve o caminho do arquivo. Levanta erro se algo nao bater - ai nada e executado."""
+    import hashlib
+    import tempfile
+    dest = os.path.join(tempfile.gettempdir(), f"TradutorRuneteria-Atualizar-{info['version']}.exe")
+    part = dest + ".part"
+    h, got, last = hashlib.sha256(), 0, -1
+    req = urllib.request.Request(info["url"], headers=UA)
+    with urllib.request.urlopen(req, timeout=30) as r, open(part, "wb") as f:
+        while True:
+            chunk = r.read(256 * 1024)
+            if not chunk:
+                break
+            got += len(chunk)
+            if got > info["size"]:
+                raise OSError("instalador maior que o anunciado")
+            f.write(chunk)
+            h.update(chunk)
+            pct = got * 100 // info["size"]
+            if progress and pct != last:
+                last = pct
+                progress(pct)
+    with open(part, "rb") as f:
+        head = f.read(2)
+    if got != info["size"] or head != b"MZ" or (info.get("sha256") and h.hexdigest() != info["sha256"]):
+        os.remove(part)
+        raise OSError("instalador baixado nao confere")
+    os.replace(part, dest)
+    return dest
+
+
 def newer_version():
     """Numero da versao publicada no GitHub se for mais nova que esta; senao None."""
     try:

@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "Tradutor Runeteria"
-APP_VERSION = "1.1.2"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
+APP_VERSION = "1.1.3"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
 # servidor de traducao online (servidor/worker.js no Cloudflare). Vazio = so a traducao offline
 ONLINE_MT_URL = "https://tradutor-runeteria.translator-runeteria.workers.dev"
 APP_STAGE = "beta"      # "beta" mostra o aviso de versao de testes na janela; "" na versao final
@@ -53,6 +53,7 @@ ONLINE_SHARED = os.path.join(ONLINE_DIR, "compartilhada.json")
 
 DEFAULTS = {
     "servidor": "runeteria.com",
+    "so_no_runeteria": False,   # true = so traduz com o log do Hytale dizendo que voce esta no Runeteria
     "intervalo_segundos": 0.8,
     "escala_ocr": "auto",   # "auto" = acompanha o tamanho do texto (qualquer resolucao); ou um numero, ex. 1.6
     "similaridade_minima": 86,
@@ -61,6 +62,7 @@ DEFAULTS = {
     "tamanho_fonte_min": 6,   # em pixels; o overlay nunca fica menor que isso nem que 60% do original
     "permitir_gravar": True,
     "traducao_online": True,
+    "traduzir_chat": False,   # opcao da janela: chat traduzido (so a mensagem sob o mouse). Desligado = nada do chat
     "chat_ao_passar_o_mouse": True,  # chat so e traduzido com o chat aberto, na mensagem sob o mouse   # texto que nao esta na biblioteca: traduz no servidor (melhor e mais rapido)   # a traducao aparece em gravacoes/transmissoes (OBS, Discord, Xbox Game Bar)
     "fonte_overlay": "auto",   # auto = mesma fonte do jogo (Lexend/Inter/Cormorant); ou um nome, ex. "Segoe UI"
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo

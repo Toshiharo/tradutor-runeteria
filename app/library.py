@@ -53,6 +53,32 @@ def _variable_like(span):
     return len(words) >= 2 and not span.isupper() and all(w[:1].isupper() for w in words)
 
 
+_NEG_PREFIX = ("un", "dis", "non", "de", "in", "im")
+_NEG_WORDS = {"not", "no", "never", "without", "cannot", "can't", "cant", "don't", "dont", "won't", "wont"}
+_ANTONYMS = [{"enable", "disable"}, {"enabled", "disabled"}, {"on", "off"}, {"show", "hide"}, {"open", "close"},
+             {"open", "closed"}, {"add", "remove"}, {"buy", "sell"}, {"join", "leave"}, {"accept", "decline"},
+             {"online", "offline"}, {"start", "stop"}, {"increase", "decrease"}, {"more", "less"},
+             {"max", "min"}, {"maximum", "minimum"}, {"win", "lose"}, {"public", "private"}]
+
+
+def _opposite(na, nb):
+    """As duas frases sao parecidas na escrita mas dizem o contrario? ("Unfavourite" x "Favourite",
+    "Unlock" x "Lock", "Disable" x "Enable", "Not listed" x "Listed"). Parecido assim nunca vale: a tela
+    mostrava "Favorito" no botao de desfavoritar."""
+    sa, sb = set(na), set(nb)
+    if (sa & _NEG_WORDS) != (sb & _NEG_WORDS):
+        return True
+    da, db = sa - sb, sb - sa
+    for x in da:
+        for y in db:
+            if {x, y} in _ANTONYMS:
+                return True
+            for long_, short in ((x, y), (y, x)):
+                if len(short) >= 4 and any(long_ == p + short for p in _NEG_PREFIX):
+                    return True
+    return False
+
+
 def adapt(screen, en, pt, strict):
     """Ajusta a traducao de `en` (texto da biblioteca) para `screen` (o que esta na tela), ou None.
 
@@ -66,6 +92,8 @@ def adapt(screen, en, pt, strict):
     from rapidfuzz import fuzz
     a, b = screen.split(), en.split()
     na, nb = [_tok(x) for x in a], [_tok(x) for x in b]
+    if _opposite(na, nb):
+        return None
     out, changed = pt, 0
     for op, i1, i2, j1, j2 in difflib.SequenceMatcher(None, nb, na, autojunk=False).get_opcodes():
         if op == "equal":

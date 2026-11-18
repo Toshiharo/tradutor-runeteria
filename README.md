@@ -34,7 +34,7 @@ Quando o tradutor abrir, olhe a parte **Preparação** da janela:
 2. Abra o Hytale e entre em `play.runeteria.com`.
 3. A tradução aparece por cima das telas do jogo.
 
-Deixe o jogo em **Janela** ou **Tela cheia sem borda**: em tela cheia exclusiva a tradução não aparece. O tradutor só funciona dentro do Runeteria; em outro servidor ou no menu ele fica parado.
+Deixe o jogo em **Janela** ou **Tela cheia sem borda**: em tela cheia exclusiva a tradução não aparece. O tradutor liga sozinho com o jogo aberto. Ele foi feito para as telas do Runeteria: fora dele também tenta traduzir o que aparece, mas as traduções revisadas são só as do Runeteria.
 
 | Atalho | O que faz |
 | --- | --- |
@@ -46,7 +46,7 @@ Na janela do tradutor dá para ligar **Abrir junto com o Windows**, para ele já
 
 ## Atualizações
 
-Clique em **Verificar atualizações** na janela do tradutor. Ele baixa as traduções corrigidas e avisa quando sai uma versão nova do programa; nesse caso, clique em **Baixar** e instale por cima, sem precisar desinstalar antes.
+Clique em **Verificar atualizações** na janela do tradutor. Ele baixa as traduções corrigidas e avisa quando sai uma versão nova do programa; nesse caso, clique em **Atualizar**: o tradutor baixa a versão nova, instala sozinho e abre de novo (a partir da versão 1.1.3; nas anteriores, baixe o instalador e instale por cima).
 
 ## Problemas comuns
 
@@ -72,7 +72,7 @@ Configurações do Windows > Aplicativos > **Tradutor Runeteria** > Desinstalar.
 
 - Não mexe no jogo: só lê a tela e os arquivos de registro do Hytale.
 - A tradução funciona sem internet. A internet é usada para baixar traduções novas deste repositório, saber se saiu versão nova e, com a **Tradução online** ligada, traduzir texto que ainda não está na biblioteca. Cada uma dessas opções pode ser desligada na janela.
-- Com a Tradução online ligada, o texto em inglês do jogo que o tradutor não conhece (inclusive mensagens do chat) é enviado ao servidor do projeto, que traduz com o DeepL. As traduções de telas ficam guardadas para os outros jogadores; mensagens de chat não são guardadas. Nada do seu computador é enviado e nem o seu nome nem o seu IP são gravados (o IP só é usado, cifrado, para limitar o uso por dia). Com a opção desligada, nada sai do seu computador.
+- Com a Tradução online ligada, o texto em inglês do jogo que o tradutor não conhece (e, se você ligar a opção **Traduzir o chat (não recomendado)**, a mensagem do chat sob o mouse) é enviado ao servidor do projeto, que traduz com o DeepL. As traduções de telas ficam guardadas para os outros jogadores; mensagens de chat não são guardadas. Nada do seu computador é enviado e nem o seu nome nem o seu IP são gravados (o IP só é usado, cifrado, para limitar o uso por dia). Com a opção desligada, nada sai do seu computador.
 - As traduções vêm de uma biblioteca com mais de 2.700 textos revisados à mão ([`app/data/biblioteca.json`](app/data/biblioteca.json)).
 
 ## Ajudar com as traduções

@@ -7,7 +7,8 @@ compartilhado com outros jogadores brasileiros. Todas as traduções são em por
 
 ## O que é
 App Windows que traduz para pt-BR as telas do servidor **Runeteria** (Hytale, `play.runeteria.com:5520`),
-desenhando a tradução por cima da janela do jogo. Só funciona dentro do Runeteria. A tradução é offline
+desenhando a tradução por cima da janela do jogo. Desde a 1.1.3 traduz com o jogo aberto em qualquer lugar (o dono
+tirou a exigência de estar no Runeteria; `so_no_runeteria: true` no config.json traz de volta). A tradução é offline
 (a internet é usada só para baixar traduções/versões novas, ver "Internet").
 O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. **Nunca modificar o cache do jogo.**
 
@@ -122,7 +123,8 @@ Chat (`pipeline.chat_split`): traduz só a mensagem, vai para a fila na hora; po
 (`chat_girias` do glossário) não gastam nada; mensagem de até 3 palavras vai só para a offline.
 "Nome + frase da biblioteca" (`Translator._name_then_phrase`: "Kwaxu has joined") traduz só a frase.
 Chat só com o cursor visível (chat aberto) e só a mensagem sob o mouse (`Translator.pointer`, `_chat_blocks` junta as
-linhas de continuação; caixas `chat: True` somem do slot quando o mouse sai). `chat_ao_passar_o_mouse` no config.
+linhas de continuação; caixas `chat: True` somem do slot quando o mouse sai). Opção da janela "Traduzir o chat (não recomendado)"
+(`traduzir_chat`, desligada por padrão desde a 1.1.3: desligada, nada do chat é traduzido nem enviado).
 O chat fica sempre no mesmo lugar (captura 1920x1015: x 45–515, y 295–775; `Translator.view` + `_chat_zone_lines`
 usam frações da ALTURA da janela). Sem cursor (andando) tudo nesse lugar é chat e não é traduzido nem enviado, mesmo
 sem "canal nome:" ("zuul has joined", "jenin: rip"). Com cursor, só a linha sob o mouse, sempre como chat (flag False).
@@ -131,6 +133,15 @@ não vão para a tradução (`looks_translatable` recusa letra fora do ASCII; `T
 Servidor `VERSAO = "2"`: a memória da versão 1 tinha conversa de chat (app 1.1.0/1.1.1) e é ignorada; só app
 >= 1.1.2 grava na memória permanente (`GUARDA_DESDE`). Publicar o servidor: `npx wrangler deploy` em `servidor/`.
 Os testes usam pasta de dados temporária (`tests/_isolar.py`, importar antes de `config`).
+Cada linha do chat é uma mensagem: só continua na de baixo se a de cima foi até a borda do chat e a de baixo não é
+aviso (`_CHAT_NOTICE`: "has joined", "Welcome X to") nem outra pessoa (`_OTHER_SPEAKER`). O mouse vale na linha
+inteira da caixa do chat (`_hovered`). Jogador entrando/saindo ("X has joined [NA] NA Hub.", "Welcome X to
+Runeteria!") nunca é traduzido nem enviado, em lugar nenhum da tela, com a opção do chat ligada ou não
+(`pipeline.login_notice`; pedido do dono). Chat aberto sem mensagem "canal nome:" na tela: só vira chat a linha
+com cara de fala ("jenin: rip") na margem lembrada do chat (`_zone`).
+Valores do jogo nunca são redesenhados a partir do OCR: preço = número + c/s/g, junto ou separado ("15c", "15 c",
+"1s 50c"), que o leitor lê errado ("soc", "Is SOC"). `pipeline.value_line` deixa a linha só de valor sem tradução
+(também "Lv IO"); `_price_line` troca só "per"/"each" em "50c per 100" / "5c each" (tela do Peixeiro).
 Mouse mexeu = remonta as caixas de `last_lines` sem OCR; o resultado é conferido contra a captura daquela leitura
 (`App.last_img`/`last_rect`), nunca contra a de agora: senão a tradução da tela antiga volta em cima da tela nova
 e fica (bug da 1.1.0; só aparece com o cenário mexendo atrás do menu, simular com ruído numa faixa da captura).
@@ -167,7 +178,11 @@ botões técnicos (pasta, recarregar, telas novas): o usuário é leigo.
 `online.py` só lê do GitHub (`Toshiharo/tradutor-runeteria`): `app/data/biblioteca.json` e `glossario.json` do branch
 main (com ETag, validados, gravados em `%APPDATA%\RuneteriaTradutor\online`) e a tag da última release para avisar de
 versão nova. Nunca envia dados. Corrigir uma tradução = commit no main; os jogadores recebem ao abrir o app.
-Versão: `config.APP_VERSION` (o build passa para o instalador); publicar = release com tag `vX.Y.Z` e o instalador anexado.
+Versão: `config.APP_VERSION` (o build passa para o instalador); publicar = release com tag `vX.Y.Z` e o instalador anexado
+com o nome `TradutorRuneteria-Instalar.exe` (o app procura esse nome). Botão "Atualizar" (1.1.3+, `main.start_update`):
+`online.latest_installer`/`download_installer` baixam o instalador da release (só de `github.com/<REPO>/releases/download/`,
+conferindo tamanho e o sha256 que o GitHub informa) e `install_update` roda um .cmd que espera o app fechar, instala com
+`/SILENT` e abre o app de novo. Se falhar, abre a página de download.
 
 ## Build
 `build.bat`: cria `.venv`, instala `requirements.txt` + pyinstaller, roda `baixar_modelo.py` (Argos en_pt 1.9 → `modelos/en_pt`),

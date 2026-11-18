@@ -30,7 +30,7 @@
 "reviewed": true
 },
 "Trade": {
-"pt": "Comércio",
+"pt": "Troca",
 "source": "manual",
 "reviewed": true
 },
@@ -14311,6 +14311,26 @@
 },
 "Announcement:": {
 "pt": "Anúncio:",
+"source": "manual",
+"reviewed": true
+},
+"Woodcutting": {
+"pt": "Corte de Lenha",
+"source": "manual",
+"reviewed": true
+},
+"Unfavourite": {
+"pt": "Desfavoritar",
+"source": "manual",
+"reviewed": true
+},
+"Unfavorite": {
+"pt": "Desfavoritar",
+"source": "manual",
+"reviewed": true
+},
+"Favorite": {
+"pt": "Favorito",
 "source": "manual",
 "reviewed": true
 }

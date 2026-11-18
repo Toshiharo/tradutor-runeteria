@@ -14,6 +14,7 @@ from online_mt import OnlineMT  # noqa: E402
 from pipeline import Translator, chat_split, looks_portuguese  # noqa: E402
 
 LIB = Library()
+CFG = dict(config.DEFAULTS, traduzir_chat=True)  # a opcao da janela ligada (vem desligada)
 
 
 class Chat(unittest.TestCase):
@@ -49,7 +50,7 @@ class Chat(unittest.TestCase):
                 return 1
 
         mt = FakeMT()
-        tr = Translator(LIB, mt, dict(config.DEFAULTS))
+        tr = Translator(LIB, mt, dict(CFG))
         line = "G (NA-DRV) Bob_99: anyone want to do the dungeon"
         self.assertIsNone(tr._one(line))  # primeira vez: foi para a fila (sem esperar a segunda leitura)
         for _ in range(50):
@@ -69,15 +70,15 @@ class Economia(unittest.TestCase):
         mt = OfflineTranslator(config.MODEL_DIR, LIB.glossary, LIB.terms)  # sabe que Kwaxu nao e palavra inglesa
         if not mt.ok:
             self.skipTest('modelo offline nao encontrado')
-        tr = Translator(LIB, mt, dict(config.DEFAULTS))
-        self.assertEqual(tr._one("Kwaxu has joined")[0], "Kwaxu entrou")
-        self.assertEqual(tr._one("MarbleMouse743 has joined")[0], "MarbleMouse743 entrou")
+        tr = Translator(LIB, mt, dict(CFG))
+        self.assertIsNone(tr._one("Kwaxu has joined"))  # jogador entrando: nunca e traduzido (pipeline.login_notice)
+        self.assertIsNone(tr._one("MarbleMouse743 has joined"))
         r = tr._one("[From Jm_Az (NA Hub)] started a conversation with you. Use /r or /whisper to reply.")
         self.assertEqual(r[0], "[From Jm_Az (NA Hub)] começou uma conversa com você. Use /r ou /whisper para responder.")
         self.assertIsNone(tr._one("Iron has joined", allow_mt=False))  # "Iron" nao tem cara de nome
 
     def test_girias_sao_traduzidas_sem_fila(self):
-        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        tr = Translator(LIB, None, dict(CFG))
         self.assertEqual(tr._one("G (NA-DRV) Bob_99: ty gg")[0], "G (NA-DRV) Bob_99: valeu gg")
         self.assertEqual(tr._one("G (NA-DRV) Bob_99: lol")[0], "G (NA-DRV) Bob_99: kkkk")
         self.assertIsNone(tr._one("G (NA-DRV) Bob_99: rip", allow_mt=True))  # "rip" fica "rip": nada a desenhar
@@ -116,12 +117,12 @@ class ChatNoMouse(unittest.TestCase):
                 ln("G (NA-HUB) Zed_1: the server is full of people", 128), ln("from an old regime", 142, x=12)]
 
     def test_sem_cursor_nada_do_chat(self):
-        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        tr = Translator(LIB, None, dict(CFG))
         tr.pointer = None
         self.assertEqual(tr.boxes(self._lines()), [])
 
     def test_so_a_mensagem_sob_o_mouse(self):
-        tr = Translator(LIB, None, dict(config.DEFAULTS))
+        tr = Translator(LIB, None, dict(CFG))
         tr.pointer = (60, 104)
         out = tr.boxes(self._lines())
         self.assertEqual([b["pt"] for b in out], ["valeu gg"])
@@ -130,7 +131,7 @@ class ChatNoMouse(unittest.TestCase):
         self.assertEqual([b["pt"] for b in tr.boxes(self._lines())], ["kkkk"])
 
     def test_mensagem_em_duas_linhas_e_uma_so(self):
-        blocks, _ = Translator._chat_blocks(self._lines())
+        blocks, _ = Translator(LIB, None, dict(CFG))._chat_blocks(self._lines())
         self.assertEqual([[l["text"] for l in b] for b in blocks],
                          [["G (NA-DRV) Bob_99: ty gg"], ["G (NA-HUB) Ann_7: lol"],
                           ["G (NA-HUB) Zed_1: the server is full of people", "from an old regime"]])
@@ -146,7 +147,7 @@ class ChatNoMouse(unittest.TestCase):
             def pieces(self, w):
                 return 1
 
-        tr = Translator(LIB, FakeMT(), dict(config.DEFAULTS))
+        tr = Translator(LIB, FakeMT(), dict(CFG))
         tr.pointer = (40, 146)  # mouse na segunda linha da mensagem
         tr.boxes(self._lines())
         for _ in range(50):

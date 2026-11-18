@@ -14,7 +14,8 @@ Para receber traduções corrigidas e versões novas, clique em "Verificar atual
 
 Se a tradução não aparecer
 - Deixe o jogo em JANELA ou TELA CHEIA SEM BORDA (em tela cheia exclusiva ela não aparece).
-- O tradutor só funciona dentro do Runeteria. Em outro servidor ou no menu ele fica parado.
+- O tradutor liga sozinho com o jogo aberto. Ele foi feito para as telas do Runeteria:
+  fora dele também tenta traduzir, mas as traduções revisadas são só as do Runeteria.
 - Na primeira vez, clique em "Instalar" na linha "Leitor de tela" e aceite o pedido do
   Windows. Isso instala o leitor de texto em inglês do próprio Windows (leva um minuto).
 
@@ -29,8 +30,9 @@ O QUE ELE FAZ E O QUE NÃO FAZ
 - Não mexe no jogo: só lê a tela e os arquivos de registro do Hytale.
 - A tradução funciona sem internet. Com a opção "Buscar traduções novas na internet"
   ligada, ele baixa a lista de traduções mais nova e avisa quando sai uma versão nova.
+  Clicando em Atualizar, ele baixa a versão nova, instala sozinho e abre de novo.
 - Com a opção "Tradução online" ligada, o texto em inglês do jogo que ele ainda não
-  conhece (inclusive a mensagem do chat em que você passa o mouse) é enviado ao servidor
+  conhece (e, se você ligar a opção de traduzir o chat, a mensagem sob o mouse) é enviado ao servidor
   do tradutor, que traduz melhor que a tradução do próprio programa. Só vai o texto do
   jogo: nada do seu computador é enviado e nem o seu nome nem o seu IP são gravados.
   Com a opção desligada, nada sai do seu computador.
