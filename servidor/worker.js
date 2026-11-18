@@ -17,7 +17,10 @@
 const MAX_TEXTS = 20;      // por pedido
 const MAX_CHARS = 600;     // por texto
 const MAX_TOTAL = 6000;    // por pedido
-const VERSAO = "1";        // muda a chave da memoria (zera o cache) se o jeito de traduzir mudar
+const VERSAO = "2";        // muda a chave da memoria (zera o cache) se o jeito de traduzir mudar
+// "2": a memoria da versao 1 foi abandonada - o app 1.1.0/1.1.1 mandava conversa do chat e texto em
+// portugues como se fosse tela. /memoria so devolve o que foi gravado nesta versao.
+const GUARDA_DESDE = [1, 1, 2]; // so app desta versao em diante grava na memoria permanente
 const CACHE_CHAT = 3600;      // segundos que uma mensagem de chat fica no cache
 const CACHE_TELA = 86400 * 7; // texto de tela tambem fica no cache (poupa leitura do KV)
 const RESERVA_CHAT = 0.8;     // passou disso da cota do mes: chat so na traducao offline
@@ -112,6 +115,10 @@ async function traduzir(request, env) {
   if (!(request.headers.get("User-Agent") || "").startsWith("tradutor-runeteria")) {
     return json({ erro: "cliente desconhecido" }, 403);
   }
+  // app antigo (ou cliente desconhecido) recebe traducao, mas nada dele fica guardado
+  const ver = /^tradutor-runeteria\/(\d+)\.(\d+)\.(\d+)/.exec(request.headers.get("User-Agent") || "");
+  const guardaOk = !!ver && [1, 2, 3].map((i) => Number(ver[i]))
+    .reduce((r, n, i) => r !== 0 ? r : Math.sign(n - GUARDA_DESDE[i]), 0) >= 0;
   let corpo;
   try {
     corpo = await request.json();
@@ -192,11 +199,12 @@ async function traduzir(request, env) {
       out[i] = pt;
       if (feitos.has(chaves[i])) continue;
       feitos.add(chaves[i]);
-      const chat = guardar[i] === false;
+      const chat = guardar[i] === false || !guardaOk;
       gravar.push(paraCache(chaves[i], pt, chat ? CACHE_CHAT : CACHE_TELA));
       if (!chat && env.MEMORIA) {
         // metadado (ate 1 KB): o texto inteiro, para virar chave da memoria compartilhada do app
         const meta = textos[i].length + pt.length < 900 ? { en: textos[i], pt } : textos[i].length < 900 ? { en: textos[i] } : {};
+        meta.v = VERSAO;
         // o plano gratis grava 1.000 por dia: se passar, a traducao vai assim mesmo (e fica no cache)
         gravar.push(env.MEMORIA.put(chaves[i], pt, { metadata: meta }).catch(() => null));
       }
@@ -214,10 +222,10 @@ async function memoria(request, env, url) {
   const token = request.headers.get("Authorization") || "";
   if (!env.ADMIN_TOKEN || token !== "Bearer " + env.ADMIN_TOKEN) return json({ erro: "sem permissao" }, 401);
   const lista = await env.MEMORIA.list({ prefix: "t:", cursor: url.searchParams.get("cursor") || undefined });
-  const itens = await Promise.all(lista.keys.map(async (k) => {
+  const itens = await Promise.all(lista.keys.filter((k) => (k.metadata || {}).v === VERSAO).map(async (k) => {
     const m = k.metadata || {};
     const pt = m.pt !== undefined ? m.pt : await env.MEMORIA.get(k.name);
-    return { en: m.en, pt };
+    return { en: m.en, pt, v: m.v };
   }));
   return json({ itens, cursor: lista.list_complete ? null : lista.cursor });
 }

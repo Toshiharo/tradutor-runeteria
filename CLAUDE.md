@@ -123,6 +123,17 @@ Chat (`pipeline.chat_split`): traduz só a mensagem, vai para a fila na hora; po
 "Nome + frase da biblioteca" (`Translator._name_then_phrase`: "Kwaxu has joined") traduz só a frase.
 Chat só com o cursor visível (chat aberto) e só a mensagem sob o mouse (`Translator.pointer`, `_chat_blocks` junta as
 linhas de continuação; caixas `chat: True` somem do slot quando o mouse sai). `chat_ao_passar_o_mouse` no config.
+O chat fica sempre no mesmo lugar (captura 1920x1015: x 45–515, y 295–775; `Translator.view` + `_chat_zone_lines`
+usam frações da ALTURA da janela). Sem cursor (andando) tudo nesse lugar é chat e não é traduzido nem enviado, mesmo
+sem "canal nome:" ("zuul has joined", "jenin: rip"). Com cursor, só a linha sob o mouse, sempre como chat (flag False).
+Muitos jogadores usam o Hytale em português: menus do próprio jogo ("Modo de voo", "Inventårio" lido pelo OCR en-US)
+não vão para a tradução (`looks_translatable` recusa letra fora do ASCII; `Translator._already_portuguese`).
+Servidor `VERSAO = "2"`: a memória da versão 1 tinha conversa de chat (app 1.1.0/1.1.1) e é ignorada; só app
+>= 1.1.2 grava na memória permanente (`GUARDA_DESDE`). Publicar o servidor: `npx wrangler deploy` em `servidor/`.
+Os testes usam pasta de dados temporária (`tests/_isolar.py`, importar antes de `config`).
+Mouse mexeu = remonta as caixas de `last_lines` sem OCR; o resultado é conferido contra a captura daquela leitura
+(`App.last_img`/`last_rect`), nunca contra a de agora: senão a tradução da tela antiga volta em cima da tela nova
+e fica (bug da 1.1.0; só aparece com o cenário mexendo atrás do menu, simular com ruído numa faixa da captura).
 Memória compartilhada: `.github/workflows/memoria.yml` roda `tools/baixar_memoria.py` todo dia (segredo
 `TRADUTOR_ADMIN` = ADMIN_TOKEN do servidor) e grava `app/data/compartilhada.json` ({texto protegido: tradução});
 o app sincroniza como a biblioteca e consulta antes do servidor (`online_mt.from_shared`), mesmo offline.

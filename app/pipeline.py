@@ -204,8 +204,9 @@ def looks_translatable(text):
     letters = sum(c.isalpha() for c in t)
     if letters / len(t) < 0.5:
         return False
-    # texto ja em portugues (acentos tipicos) nao precisa
-    if PT_RE.search(t.lower()):
+    # texto ja em portugues nao precisa. Qualquer letra fora do ASCII conta: o texto do Runeteria e ingles
+    # sem acento, e o leitor (en-US) le os acentos do cliente em portugues errado ("Inventårio", "colisäo")
+    if PT_RE.search(t.lower()) or any(c.isalpha() and ord(c) > 127 for c in t):
         return False
     words = WORD_RE.findall(t)
     good = [w for w in words if _wordlike(w)]
@@ -239,6 +240,11 @@ _PT_WORDS = {"que", "não", "nao", "é", "eu", "vc", "você", "voce", "pra", "pr
              "mais", "ainda", "agora", "hoje", "sei", "sou", "foi", "então", "entao", "ninguém", "ninguem",
              "alguma", "algum", "fala", "falou", "beleza", "blz", "slk", "mds", "nada", "tudo", "ajuda", "preciso",
              "onde", "fica", "achei", "acho", "estou", "aqui", "lá", "dele", "dela", "gente", "bora"}
+
+
+CHAT_ZONE_KEEP = 1800.0  # segundos que a posicao do chat fica lembrada sem ver uma mensagem "canal nome:"
+# comeco de mensagem que chat_split nao reconhece (nome todo minusculo, etiqueta de rank na frente)
+_OTHER_SPEAKER = re.compile(r"^(?:\[[^\]]+\]\s+)?[^\s:]{2,}:\s+\S")
 
 
 def chat_split(text):
@@ -281,6 +287,8 @@ class Translator:
         self._unknown = {}     # palavra -> o modelo de traducao nao conhece (nome inventado)
         self.chat = {}         # mensagem de chat -> traducao (fica so na memoria do programa)
         self.pointer = None    # (x, y) do cursor na janela do jogo, ou None (chat fechado: nao traduz chat)
+        self._zone = None      # onde fica a coluna do chat na tela (ver _chat_zone_lines)
+        self.view = None       # (largura, altura) da janela do jogo, para saber onde fica o chat
         if self._mt_ok():
             threading.Thread(target=self._worker, daemon=True).start()
 
@@ -474,6 +482,25 @@ class Translator:
             words.update(w.lower() for w in WORD_RE.findall(t))
         return words
 
+    def _already_portuguese(self, text):
+        """Texto de tela que ja esta em portugues sem acento ("Modo de voo", "Pegar metade SHIFT", "Voltar"):
+        quem joga com o Hytale em portugues tem os menus do proprio jogo assim, e eles iam para a traducao
+        como se fossem ingles. Portugues = a maioria das palavras so aparece nas traducoes da biblioteca,
+        nunca nos textos em ingles dela."""
+        vocab = getattr(self, "_pt_vocab", None)
+        if vocab is None:
+            pt, en = set(_PT_WORDS), set()
+            for k, v in list(getattr(self.lib, "seed", {}).items()):
+                if isinstance(v, dict) and isinstance(v.get("pt"), str):
+                    en.update(w.lower() for w in WORD_RE.findall(k))
+                    pt.update(w.lower() for w in re.findall(r"[^\W\d_]{2,}", v["pt"]))
+            vocab = self._pt_vocab = pt - en - self._known_words()
+        words = [w.lower() for w in WORD_RE.findall(text) if len(w) >= 2 and not w.isupper()]
+        if not words:
+            return False
+        hits = sum(w in vocab for w in words)
+        return hits >= 1 and hits / len(words) >= 0.6
+
     def _maybe_queue(self, text):
         """Manda para a traducao automatica so o que parece texto de verdade e esta parado na tela."""
         if not self.cfg.get("traduzir_desconhecidos", True) or not self._mt_ok():
@@ -485,7 +512,7 @@ class Translator:
         with self._lock:
             if key in self.pending or key in self.failed:
                 return
-            if not looks_translatable(text):
+            if not looks_translatable(text) or self._already_portuguese(text):
                 return
             rec = self.seen.get(key)
             if rec is None or now - rec[1] > FORGET_SECONDS:
@@ -648,10 +675,68 @@ class Translator:
                 if (id(nx) in used or gap < -last["h"] * 0.3 or chat_split(nx["text"])
                         or abs(nx["x"] - ln["x"]) > ln["h"] * 3 or not 0.75 < nx["h"] / ln["h"] < 1.33):
                     continue
+                if _OTHER_SPEAKER.match(nx["text"]):
+                    break  # "jenin: ...", "[Copper] Semedar: ...": outra pessoa falando, nao e continuacao
                 blk.append(nx)
                 used.add(id(nx))
             blocks.append(blk)
         return blocks, used
+
+    def _chat_zone_lines(self, lines, blocks, used):
+        """Linhas que estao na coluna do chat mas nao tem cara de mensagem ("Kwaxu has joined", "jenin: rip",
+        "[Copper] Semedar: ...", um pedaco de mensagem que o OCR separou). Sem isto elas eram tratadas como
+        texto de tela: traduzidas sem o mouse em cima, andando pelo mundo, e ainda iam para a memoria
+        compartilhada. A coluna e achada pelas mensagens reconhecidas (mesma margem esquerda, mesma altura
+        de letra, uma linha colada na outra) e fica lembrada: andando pelo mundo (sem cursor) ela vale mesmo
+        quando nenhuma linha da leitura tem "canal nome:". Com o cursor visivel pode haver um menu aberto,
+        entao so entram as linhas do meio/fim da pilha de mensagens reconhecidas."""
+        heads = [b[0] for b in blocks]
+        now = time.monotonic()
+        zone = self._zone
+        # o chat do Runeteria fica sempre no mesmo lugar: lado esquerdo, do meio da tela para baixo (medido
+        # numa captura 1920x1015: x 45-515, y 295-775). Em fracoes da ALTURA da janela, com folga, para
+        # valer em qualquer resolucao e proporcao (a interface do jogo acompanha a altura)
+        region = None
+        if self.view:
+            vh = self.view[1]
+
+            def region(l):
+                return l["x"] < vh * 0.53 and vh * 0.27 < l["y"] + l["h"] / 2 < vh * 0.79
+        if region and self.pointer is None:
+            # andando pelo mundo nao ha menu aberto: tudo que esta nesse lugar e chat, sem excecao
+            return [l for l in lines if id(l) not in used and region(l)]
+        if heads:
+            h = sorted(l["h"] for l in heads)[len(heads) // 2]
+            x = min(l["x"] for l in heads)
+            members = [l for b in blocks for l in b]
+        elif zone and self.pointer is None and now - zone["t"] < CHAT_ZONE_KEEP:
+            h, x, members = zone["h"], zone["x"], []
+        else:
+            return []
+        cand = [l for l in lines if id(l) not in used and (region is None or region(l))
+                and x - h <= l["x"] <= x + 3 * h and 0.75 < l["h"] / h < 1.33]
+        out = []
+        if not heads:  # sem mensagem reconhecida: parte do lugar onde o chat estava
+            out = [l for l in cand if zone["y0"] - 2 * h <= l["y"] <= zone["y1"] + 2 * h]
+            members = list(out)
+            cand = [l for l in cand if not any(l is o for o in out)]
+        # sem saber o tamanho da janela, com o cursor visivel so vale da primeira mensagem para baixo
+        top = min(l["y"] for l in heads) - h * 0.5 if heads and self.pointer is not None and not region else None
+        grew = bool(members)
+        while grew and cand:
+            grew = False
+            for l in list(cand):
+                if top is not None and l["y"] < top:
+                    continue
+                if any(max(l["y"] - (m["y"] + m["h"]), m["y"] - (l["y"] + l["h"])) <= h * 1.6 for m in members):
+                    members.append(l)
+                    out.append(l)
+                    cand.remove(l)
+                    grew = True
+        if heads:
+            self._zone = {"x": x, "h": h, "t": now, "y0": min(l["y"] for l in members),
+                          "y1": max(l["y"] + l["h"] for l in members)}
+        return out
 
     def _hovered(self, blk):
         if not self.pointer:
@@ -669,6 +754,8 @@ class Translator:
         lines = join_known(lines, self.lib.knows)
         out = []
         chat_blocks, chat_ids = self._chat_blocks(lines)
+        chat_loose = self._chat_zone_lines(lines, chat_blocks, chat_ids)  # na coluna do chat, sem "canal nome:"
+        chat_ids = chat_ids | {id(l) for l in chat_loose}
         if chat_ids:
             lines = [l for l in lines if id(l) not in chat_ids]
 
@@ -718,6 +805,17 @@ class Translator:
             d = box(geo, first, prefix + " " + pt, origin, " ".join(l["text"] for l in blk), "left", len(blk))
             d["chat"] = True
             out.append(d)
+        for ln in chat_loose:  # aviso ou pedaco de mensagem na coluna do chat: mesma regra, so sob o mouse
+            if not self._hovered([ln]):
+                continue
+            r = self._name_then_phrase(ln["text"])  # "Kwaxu has joined": so a frase, o nome fica
+            pieces = self._span_boxes(ln, r, box, "left") if r else None
+            if not pieces:
+                r = self._chat_pt(ln["text"])  # vai como chat: nunca para a memoria compartilhada
+                pieces = [box(ln, ln, r[0], r[1], ln["text"], "left", 1)] if r else []
+            for p in pieces:
+                p["chat"] = True
+            out.extend(pieces)
 
         titles = self._card_titles(lines)
         for b in group_blocks(lines):

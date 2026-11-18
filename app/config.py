@@ -4,7 +4,7 @@ import os
 import sys
 
 APP_NAME = "Tradutor Runeteria"
-APP_VERSION = "1.1.0"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
+APP_VERSION = "1.1.2"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
 # servidor de traducao online (servidor/worker.js no Cloudflare). Vazio = so a traducao offline
 ONLINE_MT_URL = "https://tradutor-runeteria.translator-runeteria.workers.dev"
 APP_STAGE = "beta"      # "beta" mostra o aviso de versao de testes na janela; "" na versao final

@@ -22,15 +22,40 @@ import config  # noqa: E402
 
 DEST = os.path.join(ROOT, "app", "data", "compartilhada.json")
 TAG = re.compile(r"<k>\s*([ZN]\d+)\s*</k>")
+SERVER_VERSION = "2"  # VERSAO do servidor/worker.js: so entra o que foi gravado nela
 MAX_NEW = 500     # textos novos por execucao: uma enxurrada de lixo nao enche o arquivo de uma vez
 MAX_LEN = 600     # o mesmo limite do servidor (MAX_CHARS)
 LINK = re.compile(r"https?:|www\.|discord\.gg|\b[\w-]+\.(?:com|net|org|gg|io|xyz|ru|br|me|tv|ly)\b|@\w", re.I)
 WORD = re.compile(r"[A-Za-z]{3,}")
+# conversa de jogador nao pode ir para um arquivo publico: "nome: mensagem" (com ou sem canal/etiqueta antes),
+# entrada e saida de jogador. Rotulo de tela "Rotulo: valor" tambem cai aqui; nao faz falta (o valor muda).
+CHAT = re.compile(r"^(?:\S+\s+){0,4}\S*[\w\])]\s?:\s+\S|\bhas (?:joined|left)\b|\bjoined \[", re.I)
 
 
 def has_link(text):
     """Link ou contato de fora (o site do servidor aparece nas telas e pode)."""
     return bool(LINK.search(re.sub(r"(?i)\bruneteria\.com\b", "", text)))
+
+
+_PT = None
+
+
+def portuguese(text):
+    """Texto que ja esta em portugues (menus do proprio Hytale em portugues, lidos como se fossem do
+    servidor): a maioria das palavras so aparece nas traducoes da biblioteca, nunca no ingles dela."""
+    global _PT
+    if _PT is None:
+        with open(os.path.join(ROOT, "app", "data", "biblioteca.json"), encoding="utf-8") as f:
+            lib = json.load(f)
+        pt, en = set(), set()
+        for k, v in lib.items():
+            if isinstance(v, dict) and isinstance(v.get("pt"), str):
+                en.update(w.lower() for w in re.findall(r"[A-Za-z][A-Za-z'-]*", k))
+                pt.update(w.lower() for w in re.findall(r"[^\W\d_]{2,}", v["pt"]))
+        _PT = pt - en
+    words = [w.lower() for w in re.findall(r"[A-Za-z][A-Za-z'-]*", text) if len(w) >= 2 and not w.isupper()]
+    hits = sum(w in _PT for w in words)
+    return hits >= 1 and hits / len(words) >= 0.6
 
 
 def game_text(en):
@@ -39,8 +64,8 @@ def game_text(en):
     plain = re.sub(r"\s+", " ", re.sub(r"&(?:amp|lt|gt);", "&", plain))
     if not 3 <= len(plain) <= MAX_LEN or len(en) > MAX_LEN * 2 or "\n" in en:
         return False
-    if has_link(plain):
-        return False
+    if has_link(plain) or CHAT.search(TAG.sub("X", en)) or portuguese(plain) or any(c.isalpha() and ord(c) > 127 for c in plain):
+        return False  # link, conversa de jogador ("nome: mensagem", "fulano has joined") ou texto que nao e ingles
     letters = sum(c.isalpha() for c in plain)
     ascii_ok = sum(" " <= c <= "~" for c in plain)
     if letters / len(plain) < 0.5 or ascii_ok / len(plain) < 0.9:
@@ -85,8 +110,8 @@ def main():
     refused = waiting = 0
     for it in fetch_all(url, token):
         en, pt = it.get("en"), it.get("pt")
-        if en in itens:
-            continue
+        if en in itens or it.get("v") != SERVER_VERSION:
+            continue  # ja tem, ou veio da memoria antiga do servidor (tinha conversa de chat)
         if not good(en, pt):
             refused += 1
         elif len(itens) - before >= MAX_NEW:

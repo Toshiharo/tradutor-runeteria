@@ -8,6 +8,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "app"))
 
+import _isolar  # noqa: E402,F401  (pasta de dados temporaria; antes de config)
 import config  # noqa: E402
 from library import Library, adapt  # noqa: E402
 from mt import OfflineTranslator  # noqa: E402

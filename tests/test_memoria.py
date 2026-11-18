@@ -5,6 +5,7 @@ import os
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+import _isolar  # noqa: E402,F401  (pasta de dados temporaria; antes de config)
 spec = importlib.util.spec_from_file_location("baixar_memoria", os.path.join(ROOT, "tools", "baixar_memoria.py"))
 bm = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bm)
@@ -30,6 +31,13 @@ class Filtro(unittest.TestCase):
             ("contact me @someone for gold", "fale comigo @someone para ouro"),
             ("Привет всем игрокам сервера", "Olá a todos os jogadores do servidor"),
             ("aaaaaaaaaaaaaaaaaaaaaaaa", "aaaaaaaaaaaaaaaaaaaaaaab"),
+            # conversa de jogador e texto do proprio Hytale em portugues (casos reais da memoria da 1.1.0)
+            ("[Copper] maryng: keep it i have many", "[Copper] maryng: pode ficar, eu tenho muitos"),
+            ("<k>Z0</k>: Thank you soo much Cole!", "<k>Z0</k>: Muito obrigado, Cole!"),
+            ("Nickelnite: sure, Cole, in a minute", "Nickelnite: claro, Cole, em um minuto"),
+            ("Faize has joined", "Faize entrou"),
+            ("Arrasto de voo", "Arrastamento em voo"),
+            ("Inventårio", "Inventário"),
             ("12 / 40 - 3.5%", "12 / 40 - 3,5%"),
             ("x" * 700 + " word", "y" * 700 + " palavra"),
             ("Open the <k>Z0</k> bag", "Abra a bolsa"),          # perdeu o marcador

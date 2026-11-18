@@ -64,6 +64,7 @@ class App:
         self.enabled = True
         self.visible = True
         self.last_lines = []
+        self.last_img = self.last_rect = None  # captura (e janela) de onde sairam as last_lines
         self.last_boxes = []
         self.drawn_sig = None
         self._faces_memo, self._faces_pruned = {}, 0.0  # fonte escolhida por texto (ver stable_face)
@@ -610,6 +611,7 @@ class App:
                 cur = self.w.cursor_pos() if self.cfg.get("chat_ao_passar_o_mouse", True) else None
                 ptr = (cur[0] - x, cur[1] - y) if cur and 0 <= cur[0] - x < w and 0 <= cur[1] - y < h else None
                 self.translator.pointer = ptr
+                self.translator.view = (w, h)
                 ptr_moved = (ptr is None) != (last_ptr is None) or (
                     ptr and last_ptr and abs(ptr[0] - last_ptr[0]) + abs(ptr[1] - last_ptr[1]) > 6)
                 if ptr_moved:
@@ -643,8 +645,11 @@ class App:
                     due = moving < STABLE or (removed and now - urgent_since >= MAX_WAIT) or periodic
                 else:
                     due = periodic
-                if ptr_dirty and job is None and self.last_lines and not due:
-                    job = (pool.submit(self.translator.boxes, self.last_lines), img, rect)
+                if ptr_dirty and job is None and self.last_lines and self.last_img is not None and not due:
+                    # as linhas sao da ULTIMA LEITURA, que pode ser de uma tela que ja trocou: o resultado e
+                    # conferido contra a captura daquela leitura (nao a de agora), senao a traducao da tela
+                    # antiga era desenhada em cima da tela nova e ficava la ate o jogo mexer naquele lugar
+                    job = (pool.submit(self.translator.boxes, self.last_lines), self.last_img, self.last_rect)
                     ptr_dirty = False
                     continue
                 due = due and now - last_ocr >= MIN_GAP and job is None
@@ -654,26 +659,28 @@ class App:
                 if urgent_since is None and screen_diff(sig, ocr_sig) == 0 and self.last_lines:
                     lines = self.last_lines
                     fut = pool.submit(self.translator.boxes, lines)  # traducoes que acabaram de ficar prontas
+                    job = (fut, self.last_img if self.last_img is not None else img, self.last_rect or rect)
                 else:
                     # escala alternada: cada escala acha textos que a outra perde; somando as leituras
                     # (as traducoes ficam enquanto a regiao nao muda) a tela converge para o que as duas acham
                     ocr_pass += 1
-                    fut = pool.submit(self.read_screen, img, w, h, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0))
+                    fut = pool.submit(self.read_screen, img, w, h, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0),
+                                      rect)
                     ocr_sig = sig
-                job = (fut, img, rect)
+                    job = (fut, img, rect)
                 ptr_dirty = False  # a leitura ja usa o cursor de agora
                 last_ocr, urgent_since, removed = now, None, False
             except Exception:
                 log_error()
                 time.sleep(2)
 
-    def read_screen(self, img, w, h, scale):
+    def read_screen(self, img, w, h, scale, rect=None):
         """Le a tela e monta as traducoes (roda fora do laco de captura)."""
         lines = tidy_lines(self.ocr.recognize(img, scale))
         self.learn_text_size(lines, w, h)
         if self.cfg["usar_cores_da_tela"]:
             lines = add_colors(img, split_by_color(img, lines))
-        self.last_lines = lines
+        self.last_lines, self.last_img, self.last_rect = lines, img, rect
         boxes = self.translator.boxes(lines)
         if self.cfg["usar_cores_da_tela"]:
             restyle_spans(img, boxes)
