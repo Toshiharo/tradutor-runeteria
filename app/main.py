@@ -598,7 +598,7 @@ class App:
         ocr_pass = 0
         window_grab = None   # None = ainda nao testou; True = le so a janela do jogo; False = le a tela
         cap = None           # captura pelo Windows Graphics Capture (captura.py); None = nao aberta
-        cap_ok = self.cfg.get("captura", "auto") == "auto" and hasattr(self.w, "open_capture")
+        cap_ok = self.cfg.get("captura", "auto") in ("auto", "wgc") and hasattr(self.w, "open_capture")
         cap_last = None      # ultimo quadro: com a tela parada o Windows nao manda outro, vale este
         cap_tries = 0
         grab_tries = 0       # a primeira imagem pode vir preta (tela de carregamento): tenta algumas vezes

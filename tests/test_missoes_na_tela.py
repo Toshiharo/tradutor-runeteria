@@ -56,6 +56,28 @@ class Missoes(unittest.TestCase):
             self.assertTrue(all("Gather" in k or "Clear" in k for k in got), got)  # so os objetivos; titulos nao
         self.assertEqual(FakeMT.calls, [])  # nenhum titulo foi para a traducao automatica
 
+    def test_traco_colado_no_verbo_nao_derruba_a_leitura(self):
+        # defeito da 1.1.4: "0 / 25 -Clear Soil Blocks" (traco colado) levantava erro e a tela inteira ficava sem traducao
+        for texto, esperado in [("0 / 25 -Clear Soil Blocks", "0 / 25 -Limpe Soil Blocks"),
+                                ("0/25 - Clear Soil Blocks", "0/25 - Limpe Soil Blocks"),
+                                ("O 0 / 12 —Gather Stone Rubble", "O 0 / 12 —Colete Stone Rubble"),
+                                ("0 / 8 - Gather Cotton", "0 / 8 - Colete Cotton")]:
+            r = self.tr._one(texto, allow_mt=False)
+            self.assertEqual(r[0], esperado, texto)
+
+    def test_erro_numa_linha_nao_derruba_a_tela(self):
+        real = self.tr._one
+
+        def quebrado(text, **kw):
+            if "Rubble" in text:
+                raise ValueError("defeito de proposito")
+            return real(text, **kw)
+        self.tr._one = quebrado
+        self.tr._logged = True  # nao escreve no registro durante o teste
+        got = self.boxes([ln("Rubble Rouser", 486), ln("0 / 12 - Gather Stone Rubble", 507, x=1640),
+                          ln("Soil Search", 598), ln("0 / 25 - Clear Soil Blocks", 619, x=1640)])
+        self.assertEqual([v.split()[-1] for v in got.values()], ["Limpe"])  # a outra linha continua traduzida
+
     def test_descricao_em_tres_linhas_vem_da_biblioteca(self):
         got = self.boxes([ln("First Farm", 294), ln("Tame a male cow", 315, x=1653),
                           ln("Hold your flute and look at a wild cow in", 336, x=1653, fg="#a8acb8"),  # cinza

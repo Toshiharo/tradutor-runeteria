@@ -53,6 +53,7 @@ class WindowCapture:
             raise
         self._sess.start_capture()
         self._loop = None
+        self._off, self._off_key = (0, 0), None  # onde a area do jogo fica dentro do quadro (ver _find_offset)
 
     def grab(self, w, h):
         """Imagem PIL (RGB) da area do jogo, ou None se nao chegou quadro novo (tela parada, ou a janela acabou
@@ -82,10 +83,46 @@ class WindowCapture:
                 sb.close()
         finally:
             frame.close()
-        dx, dy = _client_offset(self.hwnd)
-        if dx < 0 or dy < 0 or dx + w > fw or dy + h > fh:
+        if (fw, fh) == (w, h):
+            return img  # tela cheia sem borda: o quadro ja e a area do jogo
+        if fw < w or fh < h:
             return None  # a janela esta mudando de tamanho: o quadro ainda e do tamanho antigo
-        return img if (dx, dy, fw, fh) == (0, 0, w, h) else img.crop((dx, dy, dx + w, dy + h))
+        key = (fw, fh, w, h, user32.IsZoomed(wintypes.HWND(self.hwnd)))
+        if self._off_key != key:
+            self._off, self._off_key = self._find_offset(img, w, h), key
+        dx, dy = self._off
+        if dx < 0 or dy < 0 or dx + w > fw or dy + h > fh:
+            return None
+        return img.crop((dx, dy, dx + w, dy + h))
+
+    def _find_offset(self, frame, w, h):
+        """Onde a area do jogo fica dentro do quadro. A conta pela borda da janela (`_client_offset`) erra com a
+        janela maximizada: o quadro vem com as bordas escondidas, a conta nao, e a traducao saia ~8 px abaixo do
+        texto (defeito da 1.1.4). Aqui o lugar e MEDIDO: compara o quadro com o PrintWindow, que devolve
+        exatamente a area do jogo, e fica com a posicao em que os dois batem. Roda so quando a janela muda de
+        tamanho ou de modo. Sem PrintWindow que preste, vale a conta."""
+        guess = _client_offset(self.hwnd)
+        try:
+            from PIL import ImageChops, ImageStat
+            import winutil
+            ref = winutil.grab_window(self.hwnd, w, h)
+            if ref is None:
+                return guess
+            small = ref.convert("L").reduce(4)
+            lo, hi = small.getextrema()
+            if hi - lo < 12:
+                return guess  # veio preta
+            gray = frame.convert("L")
+            best = None
+            for dy in range(0, min(80, frame.height - h) + 1):
+                for dx in range(0, min(40, frame.width - w) + 1):
+                    d = ImageStat.Stat(ImageChops.difference(gray.crop((dx, dy, dx + w, dy + h)).reduce(4), small)).mean[0]
+                    if best is None or d < best[0]:
+                        best = (d, dx, dy)
+            # so vale se bateu de verdade (o jogo mexe um pouco entre uma captura e outra)
+            return (best[1], best[2]) if best and best[0] < 12 else guess
+        except Exception:
+            return guess
 
     def close(self):
         for name in ("_sess", "_pool"):

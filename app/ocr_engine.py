@@ -1,7 +1,11 @@
 """OCR usando o leitor de texto que ja vem no Windows 10/11 (Windows.Media.Ocr). Offline."""
 import asyncio
+import math
+from collections import namedtuple
 
 from PIL import Image
+
+_Rect = namedtuple("_Rect", "x y width height")
 
 
 INSTALL_CMD = 'Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"'
@@ -81,11 +85,27 @@ class WindowsOcr:
         writer.write_bytes(img.tobytes())
         bmp = self._SoftwareBitmap.create_copy_from_buffer(writer.detach_buffer(), self._fmt, w, h)
         result = self.loop.run_until_complete(self.engine.recognize_async(bmp))
+        # O leitor as vezes acha que o texto esta inclinado (o cenario 3D mexendo atras do menu engana a deteccao:
+        # 1,2 graus numa tela reta) e devolve as caixas na imagem "endireitada", girada em volta do centro. Sem
+        # desfazer o giro, todas as traducoes saiam deslocadas (ate ~20 px) e ficavam la - o "desalinhado" da 1.1.4.
+        # Medido numa captura real: desfeito o giro, erro mediano 0,2 px. Giro grande demais nao e confiavel: descarta.
+        angle = getattr(result, "text_angle", None)
+        angle = float(getattr(angle, "value", angle) or 0.0)
+        if abs(angle) > 5:
+            return []
+        rot = None
+        if abs(angle) > 0.01:
+            a = math.radians(angle)
+            rot = (math.cos(a), math.sin(a), w / 2, h / 2)
         lines = []
         for line in result.lines:
             xs, ys, xe, ye, words = [], [], [], [], []
             for word in line.words:
                 r = word.bounding_rect
+                if rot:
+                    c, s, cx, cy = rot
+                    mx, my = r.x + r.width / 2 - cx, r.y + r.height / 2 - cy
+                    r = _Rect(cx + mx * c - my * s - r.width / 2, cy + mx * s + my * c - r.height / 2, r.width, r.height)
                 xs.append(r.x); ys.append(r.y); xe.append(r.x + r.width); ye.append(r.y + r.height)
                 words.append({"text": word.text, "x": r.x / scale, "y": r.y / scale,
                               "w": r.width / scale, "h": r.height / scale})

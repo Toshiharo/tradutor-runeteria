@@ -478,9 +478,12 @@ class Translator:
         # de marcar lida como uma letra na frente): so o verbo; a contagem e o nome do item ficam do jogo
         m = _TRACKER.match(text)
         if m and m.group(1)[:1].isupper() and m.group(1).lower() in verbs:
-            k = toks.index(m.group(1))
-            pt = verbs[m.group(1).lower()]
-            return " ".join(toks[:k] + [pt] + toks[k + 1:]), "manual", [(k, k + 1, pt, "manual")]
+            # o leitor as vezes cola o traco no verbo ("0 / 25 -Clear Soil Blocks"): procura a palavra que
+            # TERMINA no verbo. (Com toks.index a leitura inteira da tela quebrava - defeito da 1.1.4.)
+            k = next((i for i, t in enumerate(toks) if t.lstrip("-–—") == m.group(1)), None)
+            if k is not None:
+                pt = toks[k][:len(toks[k]) - len(m.group(1))] + verbs[m.group(1).lower()]
+                return " ".join(toks[:k] + [pt] + toks[k + 1:]), "manual", [(k, k + 1, pt, "manual")]
         for seg in segs:
             words = [toks[k] for k in seg]
             phrase = " ".join(words)
@@ -664,6 +667,24 @@ class Translator:
         from rapidfuzz import fuzz, process
         hit = process.extractOne(key, names, scorer=fuzz.ratio, score_cutoff=86)
         return bool(hit)
+
+    def _try_one(self, text, **kw):
+        """`_one` que nunca derruba a leitura da tela: um erro numa linha deixa so aquela linha em ingles.
+        (Na 1.1.4 um erro numa linha da lista de missoes deixava a tela inteira sem traducao.)"""
+        try:
+            return self._one(text, **kw)
+        except Exception:
+            if not getattr(self, "_logged", False):
+                self._logged = True  # um registro por sessao basta para achar o defeito
+                try:
+                    import traceback
+                    from config import ERROR_LOG
+                    with open(ERROR_LOG, "a", encoding="utf-8") as f:
+                        f.write(time.strftime("\n[%Y-%m-%d %H:%M:%S] linha: ") + repr(text) + "\n"
+                                + traceback.format_exc())
+                except Exception:
+                    pass
+            return None
 
     def _one(self, text, allow_mt=True, parts=True, title=False):
         if title == "name" or self._garbled_name(text):
@@ -930,7 +951,7 @@ class Translator:
         for b in group_blocks(lines):
             multi = len(b["lines"]) > 1
             full = " ".join(l["text"] for l in b["lines"])
-            r = self._one(full, allow_mt=False, parts=False) if multi else None  # paragrafo inteiro: so biblioteca
+            r = self._try_one(full, allow_mt=False, parts=False) if multi else None  # paragrafo inteiro: so biblioteca
             if r:
                 out.append(box(b, b["lines"][0], r[0], r[1], full, block_align(b["lines"]), len(b["lines"])))
                 continue
@@ -943,7 +964,7 @@ class Translator:
                     hits += 1
                     out.extend(row)
                     continue
-                r = self._one(ln["text"], allow_mt=not multi, title=titles.get(id(ln), False))
+                r = self._try_one(ln["text"], allow_mt=not multi, title=titles.get(id(ln), False))
                 if not r:
                     continue
                 hits += 1
@@ -953,7 +974,7 @@ class Translator:
                 else:
                     out.append(box(ln, ln, r[0], r[1], ln["text"], guess_align(ln, lines), 1))
             if multi and hits == 0:
-                self._one(full)  # paragrafo desconhecido: traduz inteiro em segundo plano
+                self._try_one(full)  # paragrafo desconhecido: traduz inteiro em segundo plano
         # traducao igual ao original nao precisa de caixa por cima
         return [o for o in out if o["pt"].strip() != o["en"].strip()]
 

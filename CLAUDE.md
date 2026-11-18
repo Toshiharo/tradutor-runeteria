@@ -164,6 +164,11 @@ overlay não poder ser desenhado por cima do jogo, não a captura.
 na linha; ícone do lado (colorido, ou mais alto que a linha) não conta. Antes qualquer coisa clara a 4 px bloqueava:
 com ícone colado só 423 de 600 textos eram traduzidos; agora 579 de 600 (`tests/test_icone_colado.py`).
 
+Desalinhado da 1.1.4 NÃO era a captura: o OCR do Windows às vezes detecta o texto inclinado (`text_angle` 1,2° numa
+tela reta, com o cenário 3D mexendo atrás do menu) e devolve as caixas na imagem girada em volta do centro; as
+traduções saíam até ~20 px fora e ficavam (slot). `ocr_engine.recognize` desfaz o giro (erro mediano 0,2 px; >5°
+descarta a leitura). Caso real em `tests/dados_tela_inclinada.png` (`tests/test_inclinacao.py`).
+
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura
 nova só troca se for mais completa, se o mesmo texto couber numa caixa bem mais estreita, ou se discordar 3 leituras
