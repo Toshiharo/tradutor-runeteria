@@ -163,14 +163,39 @@ def touching(img, x, y, w, h, bg, fg):
     Se sim, o OCR cortou uma palavra ao meio (leu "set" de "Reset"): traduzir o pedaco sairia errado.
     """
     y0, y1 = max(0, int(y + h * 0.15)), min(img.height, int(y + h * 0.9) + 1)
+    # ate onde procurar: o vao entre duas letras da mesma palavra, proporcional ao tamanho da letra
+    reach = max(3, min(6, int(round(h * 0.28))))
+    contrast = _dist(fg, bg) or 1.0
+
+    def letter(box):
+        # tinta DA COR DO TEXTO (a letra vizinha e da mesma cor; icone colorido do lado nao conta). Antes
+        # valia qualquer coisa mais clara que o fundo, e todo texto com icone colado ficava sem traducao
+        return sum(1 for c in img.crop(box).getdata() if _dist(c, fg) < contrast * 0.3)
+
+    def ink(box):
+        return sum(1 for c in img.crop(box).getdata() if _dist(c, fg) * 1.5 < _dist(c, bg))
     out = []
-    for x0, x1 in ((int(x) - 4, int(x) - 1), (int(x + w) + 1, int(x + w) + 4)):
+    for x0, x1 in ((int(x) - reach, int(x) - 1), (int(x + w) + 1, int(x + w) + reach)):
         x0, x1 = max(0, x0), min(img.width, x1)
         if x1 <= x0 or y1 <= y0:
             out.append(False)
             continue
-        hit = sum(1 for c in img.crop((x0, y0, x1, y1)).getdata() if _dist(c, fg) * 1.5 < _dist(c, bg))
-        out.append(hit >= 2)
+        if letter((x0, y0, x1, y1)) < 2:
+            out.append(False)
+            continue
+        # letra ou icone da mesma cor do texto? A letra vizinha cabe na linha (no maximo sobe ou desce um
+        # pouco: "R", "g"). Icone, moldura e barra passam de cima E de baixo, ou muito de um lado so
+        ya, yb = max(0, int(y - h * 0.9)), min(img.height, int(y + h * 1.9) + 1)
+        # o icone e largo: olha um pouco alem do alcance (uma letra de largura), onde o canto dele ja nao e arredondado
+        if x1 <= int(x):
+            x0 = max(0, x0 - int(h * 0.35))
+        else:
+            x1 = min(img.width, x1 + int(h * 0.35))
+        above = ink((x0, ya, x1, max(ya, int(y - h * 0.2)))) >= 1
+        below = ink((x0, min(yb, int(y + h * 1.2) + 1), x1, yb)) >= 1
+        far_up = ink((x0, ya, x1, max(ya, int(y - h * 0.6)))) >= 2
+        far_dn = ink((x0, min(yb, int(y + h * 1.6) + 1), x1, yb)) >= 2
+        out.append(not ((above and below) or far_up or far_dn))
     return tuple(out)
 
 

@@ -1,8 +1,9 @@
 # Tradutor Runeteria — contexto para o Claude Code
 
 Responda sempre em português (pt-BR). O autor é o dev principal de UI/UX do Runeteria e o dono do servidor
-autorizou o programa: não é "projeto de fã" (não escrever isso em textos públicos), mas também não é produto
-oficial do Hytale. Feito pelo autor (Windows) para ele e para ser
+autorizou o programa. Nos textos públicos (README, LEIAME, releases) o autor quer, desde 2026-11-18: "projeto
+independente, sem relação com o Runeteria; o servidor apenas deu permissão". Não escrever "da equipe do Runeteria",
+nem "projeto de fã", nem que é produto oficial do Runeteria ou do Hytale. Feito pelo autor (Windows) para ele e para ser
 compartilhado com outros jogadores brasileiros. Todas as traduções são em português do Brasil (nunca pt-PT).
 
 ## O que é
@@ -151,6 +152,17 @@ o app sincroniza como a biblioteca e consulta antes do servidor (`online_mt.from
 O servidor aceita texto de qualquer um (código público): `baixar_memoria.good`/`game_text` só deixam entrar texto com
 cara de tela do jogo (sem link, só inglês) e no máximo 500 novos por dia. Endereço do servidor:
 `https://tradutor-runeteria.translator-runeteria.workers.dev`.
+
+## Captura e texto com ícone colado (1.1.4)
+Captura: 1ª escolha é o Windows Graphics Capture (`captura.WindowCapture`, pacotes `winrt-Windows.Graphics.*` que vão
+dentro do instalador; nada para o jogador baixar). Mesma imagem do PrintWindow (só a janela do jogo, sem overlay nem
+cursor), copiar custa ~metade em janela grande e com a tela parada não chega quadro (custo zero). Qualquer falha
+(Windows antigo, sem como tirar a borda amarela, quadro preto por ~3 s, erro) cai sozinho no PrintWindow e depois na
+captura da tela. `"captura": "classica"` no config.json desliga. Não resolve tela cheia exclusiva: aí o problema é o
+overlay não poder ser desenhado por cima do jogo, não a captura.
+`style.touching` (palavra cortada pelo leitor → não traduz) só conta tinta DA COR DO TEXTO colada na ponta e que caiba
+na linha; ícone do lado (colorido, ou mais alto que a linha) não conta. Antes qualquer coisa clara a 4 px bloqueava:
+com ícone colado só 423 de 600 textos eram traduzidos; agora 579 de 600 (`tests/test_icone_colado.py`).
 
 ## Tela parada não pisca nem muda (`App.settle`)
 Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura

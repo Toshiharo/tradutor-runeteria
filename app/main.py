@@ -279,7 +279,9 @@ class App:
         """Atualiza a frase de estado e as linhas de preparacao. Sempre na thread da interface."""
         desc, active, has_win, in_rt = self.game_state
         # leitor de tela (OCR do Windows)
-        if self.ocr is None:
+        if getattr(self, "_ocr_since", None) is not None:
+            pass  # instalando: a linha mostra o contador (_ocr_tick); o botao Instalar nao volta no meio
+        elif self.ocr is None:
             if self.ocr_error:
                 self.row_ocr.set("bad", "Não instalado")
                 self.row_ocr.action(*(("Abrir", self.ocr_by_settings) if getattr(self, "ocr_failed", False)
@@ -401,11 +403,34 @@ class App:
     def install_ocr(self):
         self.row_ocr.action(None, None)
         self.row_ocr.set("off", "Instalando...")
-        self.lbl_info.config(text="Aceite o pedido do Windows. A instalação leva cerca de um minuto.")
+        self.lbl_info.config(text="Aceite o pedido do Windows para começar.")
+        self._ocr_since = time.monotonic()
         threading.Thread(target=self._install_ocr, daemon=True).start()
+        self.root.after(1000, self._ocr_tick)
+
+    def _ocr_tick(self):
+        """Enquanto o Windows instala o leitor: mostra ha quanto tempo esta instalando. Quem faz a instalacao
+        e o Windows (baixa pelo Windows Update) e nao da para apressar; sem um contador parecia travado."""
+        since = getattr(self, "_ocr_since", None)
+        if since is None:
+            return
+        t = int(time.monotonic() - since)
+        clock = f"{t // 60}:{t % 60:02d}"
+        self.row_ocr.set("off", f"Instalando... {clock}")
+        if t < 300:
+            msg = ("O Windows está baixando e instalando o leitor de tela. Costuma levar de 1 a 5 minutos, "
+                   "depende da sua internet. Pode usar o computador enquanto isso; o tradutor avisa quando terminar.")
+        else:
+            msg = ("Está demorando mais que o normal, mas o Windows ainda está instalando. Deixe o tradutor aberto. "
+                   "Se passar de 15 minutos ele mesmo mostra outro jeito de instalar.")
+        self.lbl_info.config(text=msg)
+        self.root.after(1000, self._ocr_tick)
 
     def _install_ocr(self):
-        code = self.w.install_english_ocr(os.path.join(config.USER_DIR, "instalar_leitor.log"))
+        try:
+            code = self.w.install_english_ocr(os.path.join(config.USER_DIR, "instalar_leitor.log"))
+        finally:
+            self._ocr_since = None  # para o contador
         try:
             from ocr_engine import WindowsOcr
             ocr = WindowsOcr()
@@ -572,6 +597,10 @@ class App:
         last_rect = None
         ocr_pass = 0
         window_grab = None   # None = ainda nao testou; True = le so a janela do jogo; False = le a tela
+        cap = None           # captura pelo Windows Graphics Capture (captura.py); None = nao aberta
+        cap_ok = self.cfg.get("captura", "auto") == "auto" and hasattr(self.w, "open_capture")
+        cap_last = None      # ultimo quadro: com a tela parada o Windows nao manda outro, vale este
+        cap_tries = 0
         grab_tries = 0       # a primeira imagem pode vir preta (tela de carregamento): tenta algumas vezes
         from concurrent.futures import ThreadPoolExecutor
         pool = ThreadPoolExecutor(1)  # o OCR roda aqui; a conferencia rapida continua enquanto ele le
@@ -636,7 +665,38 @@ class App:
                         self.hidden_for_capture.wait(0.4)
                         time.sleep(0.03)
                 img = None
-                if window_grab is not False:
+                if cap_ok:
+                    # 1a escolha: o quadro que a placa de video ja desenhou (mais leve, e de graca com a tela
+                    # parada). Qualquer problema - Windows antigo, quadro preto, erro - desliga e segue com
+                    # os metodos de sempre, sem o jogador perceber
+                    try:
+                        if cap is None or cap.hwnd != hwnd:
+                            if cap is not None:
+                                cap.close()
+                            cap, cap_last, cap_tries = self.w.open_capture(hwnd), None, 0
+                        img = cap.grab(w, h)
+                        if img is not None and cap_last is None:
+                            lo, hi = img.convert("L").reduce(16).getextrema()
+                            if hi - lo < 12:
+                                img = None  # preto: tela de carregamento, ou este PC nao entrega a janela assim
+                        if img is not None:
+                            if cap_last is None and window_grab is not True:
+                                window_grab = True  # le so a janela: o overlay pode aparecer em gravacoes
+                                self.ui_q.put(("recordable", self.cfg.get("permitir_gravar", True)))
+                            cap_last = img
+                        elif cap_last is not None and cap_last.size == (w, h):
+                            img = cap_last  # tela parada
+                        else:
+                            cap_tries += 1
+                            if cap_tries >= 20:  # ~3 s sem um quadro que preste: desiste deste metodo
+                                raise OSError("sem quadro do Windows Graphics Capture")
+                    except Exception:
+                        log_error()
+                        cap_ok, img = False, None
+                        if cap is not None:
+                            cap.close()
+                        cap = None
+                if img is None and window_grab is not False:
                     # le so a janela do jogo: o overlay fica de fora sem precisar ser escondido das
                     # capturas, e o jogador consegue gravar video/transmitir com a traducao aparecendo
                     try:
@@ -918,6 +978,23 @@ class App:
                 else:
                     nb["_slot"] = cur["_slot"]
                 sl.update(box=nb, thumb=region_thumb(img, b["x"], b["y"], b["w"], b["h"]), cand=None, n=0)
+        # paragrafo e pedaco dele ao mesmo tempo (o leitor ora junta as linhas, ora nao): fica o maior. Sem isto
+        # a linha solta continuava desenhada por cima do paragrafo ("... para ver se e" + "Alface em cima.")
+        def area(sl):
+            return sl["box"]["w"] * sl["box"]["h"]
+
+        def swallowed(sl):
+            a = sl["box"]
+            for o in slots:
+                b = o["box"]
+                if o is sl or area(o) <= area(sl) * 1.3 or b.get("lines", 1) < 2:
+                    continue
+                ix = min(a["x"] + a["w"], b["x"] + b["w"]) - max(a["x"], b["x"])
+                iy = min(a["y"] + a["h"], b["y"] + b["h"]) - max(a["y"], b["y"])
+                if ix > 0 and iy > 0 and ix * iy >= area(sl) * 0.7:
+                    return True
+            return False
+        slots = [sl for sl in slots if not swallowed(sl)]
         self._slots = slots
         return [sl["box"] for sl in slots]
 

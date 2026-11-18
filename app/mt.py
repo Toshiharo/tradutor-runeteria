@@ -221,11 +221,15 @@ class OfflineTranslator:
                         res[i] = r
                 miss = [i for i, r in enumerate(res) if r is None]
                 if miss and self.ok:
+                    # o servidor nao traduziu (limite do dia, cota): sai a offline, mas marcada como provisoria
+                    self.fell_back = self.fell_back or any(flags[i] != "offline" for i in miss)
                     for i, r in zip(miss, self._raw([prots[i] for i in miss])):
                         res[i] = r
                 return res
             except Exception:
                 pass
+        if self.online is not None and any(f != "offline" for f in flags):
+            self.fell_back = True  # servidor fora do ar ou em pausa: o que sair agora e da offline
         return self._raw(prots) if self.ok else [None] * len(prots)
 
     def pieces(self, word):
@@ -247,6 +251,10 @@ class OfflineTranslator:
     def translate_many(self, texts, keeps=None, keep_flags=None):
         """Traduz varios textos de uma vez (uma tela nova inteira sai bem mais rapido que um por um).
         keep_flags: False = nao guardar na memoria online (mensagem de chat)."""
+        # True quando a traducao online esta ligada mas alguma resposta deste lote veio da offline (servidor
+        # recusou ou caiu). Quem chama nao grava esse lote na memoria permanente: senao a traducao fraca
+        # ficava para sempre na frente da boa (foi o que estragou as telas de missao na 1.1.3)
+        self.fell_back = False
         if not self.ok and self.online is None and not self.shared:
             return [None] * len(texts)
         flags_all = keep_flags or [True] * len(texts)

@@ -14225,7 +14225,7 @@
 "reviewed": true
 },
 "NO KEY": {
-"pt": "SEM TECLA",
+"pt": "SEM CHAVE",
 "source": "manual",
 "reviewed": true
 },
@@ -14331,6 +14331,341 @@
 },
 "Favorite": {
 "pt": "Favorito",
+"source": "manual",
+"reviewed": true
+},
+"Ore Fortune": {
+"pt": "Fortuna de Minério",
+"source": "manual",
+"reviewed": true
+},
+"Gathering XP": {
+"pt": "XP de Coleta",
+"source": "manual",
+"reviewed": true
+},
+"Gem Find": {
+"pt": "Achado de Gemas",
+"source": "manual",
+"reviewed": true
+},
+"COOK": {
+"pt": "COZINHAR",
+"source": "manual",
+"reviewed": true
+},
+"CRAFTER": {
+"pt": "ARTESÃO",
+"source": "manual",
+"reviewed": true
+},
+"GATHERER": {
+"pt": "COLETOR",
+"source": "manual",
+"reviewed": true
+},
+"ADVENTURER": {
+"pt": "AVENTUREIRO",
+"source": "manual",
+"reviewed": true
+},
+"BAKED": {
+"pt": "ASSADOS",
+"source": "manual",
+"reviewed": true
+},
+"First craft +50% XP": {
+"pt": "Primeiro craft +50% XP",
+"source": "manual",
+"reviewed": true
+},
+"LEVEL 52": {
+"pt": "NÍVEL 52",
+"source": "manual",
+"reviewed": true
+},
+"PROGRESS TO LEVEL 53": {
+"pt": "PROGRESSO ATÉ O NÍVEL 53",
+"source": "manual",
+"reviewed": true
+},
+"NEEDS A KEY": {
+"pt": "PRECISA DE CHAVE",
+"source": "manual",
+"reviewed": true
+},
+"ENEMY HEALTH": {
+"pt": "VIDA DOS INIMIGOS",
+"source": "manual",
+"reviewed": true
+},
+"ENEMY DAMAGE": {
+"pt": "DANO DOS INIMIGOS",
+"source": "manual",
+"reviewed": true
+},
+"DEATH PENALTY": {
+"pt": "PENALIDADE POR MORTE",
+"source": "manual",
+"reviewed": true
+},
+"COMPLETION TIMER": {
+"pt": "TEMPO PARA CONCLUIR",
+"source": "manual",
+"reviewed": true
+},
+"FAST CLEAR BONUS": {
+"pt": "BÔNUS DE CONCLUSÃO RÁPIDA",
+"source": "manual",
+"reviewed": true
+},
+"CHEST LOOT": {
+"pt": "LOOT DO BAÚ",
+"source": "manual",
+"reviewed": true
+},
+"SPEED BONUS": {
+"pt": "BÔNUS DE VELOCIDADE",
+"source": "manual",
+"reviewed": true
+},
+"CLASS XP": {
+"pt": "XP DE CLASSE",
+"source": "manual",
+"reviewed": true
+},
+"YOU HAVE NO KEY FOR THIS DUNGEON": {
+"pt": "VOCÊ NÃO TEM CHAVE PARA ESTA MASMORRA",
+"source": "manual",
+"reviewed": true
+},
+"You have no key for this dungeon. Keys drop in the world.": {
+"pt": "Você não tem chave para esta masmorra. As chaves dropam pelo mundo.",
+"source": "manual",
+"reviewed": true
+},
+"Fits 1 - 6 players": {
+"pt": "Para 1 a 6 jogadores",
+"source": "manual",
+"reviewed": true
+},
+"3 dungeons": {
+"pt": "3 masmorras",
+"source": "manual",
+"reviewed": true
+},
+"0 available": {
+"pt": "0 disponíveis",
+"source": "manual",
+"reviewed": true
+},
+"1 of 10 open": {
+"pt": "1 de 10 abertos",
+"source": "manual",
+"reviewed": true
+},
+"Tame a male cow": {
+"pt": "Dome um boi",
+"source": "manual",
+"reviewed": true
+},
+"Tame a female cow": {
+"pt": "Dome uma vaca",
+"source": "manual",
+"reviewed": true
+},
+"Hold your flute and look at a wild cow in the plains to see if it's male, then use lettuce on it.": {
+"pt": "Segure sua flauta e olhe para uma vaca selvagem nas planícies para ver se é macho, depois use alface nela.",
+"source": "manual",
+"reviewed": true
+},
+"Hold your flute and look at a wild cow in the plains to see if it's female, then use lettuce on it.": {
+"pt": "Segure sua flauta e olhe para uma vaca selvagem nas planícies para ver se é fêmea, depois use alface nela.",
+"source": "manual",
+"reviewed": true
+},
+"set 11 days ago": {
+"pt": "definida há 11 dias",
+"source": "manual",
+"reviewed": true
+},
+"set 1 day ago": {
+"pt": "definida há 1 dia",
+"source": "manual",
+"reviewed": true
+},
+"set today": {
+"pt": "definida hoje",
+"source": "manual",
+"reviewed": true
+},
+"set yesterday": {
+"pt": "definida ontem",
+"source": "manual",
+"reviewed": true
+},
+"set 3 hours ago": {
+"pt": "definida há 3 horas",
+"source": "manual",
+"reviewed": true
+},
+"set 1 hour ago": {
+"pt": "definida há 1 hora",
+"source": "manual",
+"reviewed": true
+},
+"set 5 minutes ago": {
+"pt": "definida há 5 minutos",
+"source": "manual",
+"reviewed": true
+},
+"set just now": {
+"pt": "definida agora",
+"source": "manual",
+"reviewed": true
+},
+"SIDE": {
+"pt": "SECUNDÁRIA",
+"source": "manual",
+"reviewed": true
+},
+"SIDE - EASY": {
+"pt": "SECUNDÁRIA - FÁCIL",
+"source": "manual",
+"reviewed": true
+},
+"TAME A MALE AND A FEMALE COW": {
+"pt": "DOME UM BOI E UMA VACA",
+"source": "manual",
+"reviewed": true
+},
+"Tame a male and a female cow": {
+"pt": "Dome um boi e uma vaca",
+"source": "manual",
+"reviewed": true
+},
+"First: Tame a male and a female cow": {
+"pt": "Primeiro: dome um boi e uma vaca",
+"source": "manual",
+"reviewed": true
+},
+"MILK A COW": {
+"pt": "ORDENHE UMA VACA",
+"source": "manual",
+"reviewed": true
+},
+"Milk a cow": {
+"pt": "Ordenhe uma vaca",
+"source": "manual",
+"reviewed": true
+},
+"RAISE A CALF": {
+"pt": "CRIE UM BEZERRO",
+"source": "manual",
+"reviewed": true
+},
+"Breed your cows": {
+"pt": "Reproduza suas vacas",
+"source": "manual",
+"reviewed": true
+},
+"CATCH YOUR CALF": {
+"pt": "CAPTURE SEU BEZERRO",
+"source": "manual",
+"reviewed": true
+},
+"Catch your calf in the Soul Lantern": {
+"pt": "Capture seu bezerro na Soul Lantern",
+"source": "manual",
+"reviewed": true
+},
+"SHOW CLETUS YOUR CALF": {
+"pt": "MOSTRE SEU BEZERRO AO CLETUS",
+"source": "manual",
+"reviewed": true
+},
+"OPEN THE HUSBANDRY PANEL": {
+"pt": "ABRA O PAINEL DE PECUÁRIA",
+"source": "manual",
+"reviewed": true
+},
+"Open the Husbandry panel": {
+"pt": "Abra o painel de Pecuária",
+"source": "manual",
+"reviewed": true
+},
+"BUILD YOUR COWS A HOME": {
+"pt": "CONSTRUA UMA CASA PARA SUAS VACAS",
+"source": "manual",
+"reviewed": true
+},
+"Place 2 Feed Troughs, Fill a trough with food, Fill a trough with water": {
+"pt": "Coloque 2 Feed Troughs, encha um cocho com comida, encha um cocho com água",
+"source": "manual",
+"reviewed": true
+},
+"0 of 2 objectives done": {
+"pt": "0 de 2 objetivos concluídos",
+"source": "manual",
+"reviewed": true
+},
+"STEP 1 OF 7": {
+"pt": "ETAPA 1 DE 7",
+"source": "manual",
+"reviewed": true
+},
+"TRACKING - 4 OF 5": {
+"pt": "ACOMPANHANDO - 4 DE 5",
+"source": "manual",
+"reviewed": true
+},
+"You are following 4 of 4 quests in progress.": {
+"pt": "Você está acompanhando 4 de 4 missões em andamento.",
+"source": "manual",
+"reviewed": true
+},
+"1 quest": {
+"pt": "1 missão",
+"source": "manual",
+"reviewed": true
+},
+"3 quests": {
+"pt": "3 missões",
+"source": "manual",
+"reviewed": true
+},
+"PROFESSION XP": {
+"pt": "XP DE PROFISSÃO",
+"source": "manual",
+"reviewed": true
+},
+"HUSBANDRY XP": {
+"pt": "XP DE PECUÁRIA",
+"source": "manual",
+"reviewed": true
+},
+"THE FILTHY PART": {
+"pt": "A PARTE SUJA",
+"source": "manual",
+"reviewed": true
+},
+"EIGHT TO START": {
+"pt": "OITO PARA COMEÇAR",
+"source": "manual",
+"reviewed": true
+},
+"BREAK THE GROUND": {
+"pt": "QUEBRE O CHÃO",
+"source": "manual",
+"reviewed": true
+},
+"Cletus Hayward in the hub will teach you the basics of keeping animals: taming a pair of cows, giving them a home, milking and raising a calf.": {
+"pt": "Cletus Hayward, no hub, vai te ensinar o básico de cuidar de animais: domar um casal de vacas, dar um lar a elas, ordenhar e criar um bezerro.",
+"source": "manual",
+"reviewed": true
+},
+"Cows graze in the plains out on the SMP servers. You need one of each to breed, and you can tell them apart before you tame them: hold your flute and look at a wild cow to see if it's male or female, along with its traits. Then hold lettuce and use it on the cow to tame it: each tame takes one. Every animal you own is linked to your flute.": {
+"pt": "As vacas pastam nas planícies dos servidores SMP. Você precisa de um macho e de uma fêmea para reproduzir, e dá para saber qual é qual antes de domar: segure sua flauta e olhe para uma vaca selvagem para ver se é macho ou fêmea, junto com as características dela. Depois segure alface e use na vaca para domá-la: cada doma gasta uma. Todo animal que você tem fica ligado à sua flauta.",
 "source": "manual",
 "reviewed": true
 }

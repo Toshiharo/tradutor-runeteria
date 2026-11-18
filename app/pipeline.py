@@ -189,6 +189,8 @@ def group_blocks(lines):
 def _wordlike(word):
     """Palavra com cara de palavra: tem vogal e caixa regular (o OCR do cenario 3D gera coisas como 'rnIlE')."""
     core = word.replace("'", "").replace("-", "")
+    if len(core) >= 5 and max(core.lower().count(c) for c in set(core.lower())) / len(core) > 0.6:
+        return False  # fileira de icones redondos lida como letras ("ooaooo", na tela de casas)
     if len(core) < 2:
         return core in ("a", "A", "I")
     if not any(c in VOWELS for c in core.lower()):
@@ -242,6 +244,7 @@ _PT_WORDS = {"que", "não", "nao", "é", "eu", "vc", "você", "voce", "pra", "pr
              "onde", "fica", "achei", "acho", "estou", "aqui", "lá", "dele", "dela", "gente", "bora"}
 
 
+TEMP_KEEP = 900.0  # segundos que uma traducao offline provisoria vale antes de pedir de novo ao servidor
 CHAT_ZONE_KEEP = 1800.0  # segundos que a posicao do chat fica lembrada sem ver uma mensagem "canal nome:"
 # comeco de mensagem que chat_split nao reconhece (nome todo minusculo, etiqueta de rank na frente)
 _CHAT_NOTICE = re.compile(r"\bhas (?:joined|left)\b|^Welcome \S+ to |^\[|^Announcement\b")  # aviso do servidor no chat
@@ -275,6 +278,9 @@ def chat_split(text):
             return None
     return None
 
+
+# objetivo na lista de missoes da tela: "0 / 12 - Gather Stone Rubble" (grupo 1 = o verbo)
+_TRACKER = re.compile(r"^(?:\S\s+)?\d+\s*/\s*\d+\s*[-–—]\s*([A-Za-z]+)\s+\S")
 
 # preco do Runeteria (cobre/prata/ouro: "15c", "1s 50c"), tambem como o leitor de tela costuma errar:
 # 5 -> S, 0 -> O, 1 -> I/l ("50c" lido "soc"/"SOC", "1s" lido "Is")
@@ -335,6 +341,7 @@ class Translator:
         self._composed = {}    # texto -> traducao montada por partes (ou None)
         self._unknown = {}     # palavra -> o modelo de traducao nao conhece (nome inventado)
         self.chat = {}         # mensagem de chat -> traducao (fica so na memoria do programa)
+        self.temp = {}         # texto de tela -> (traducao offline provisoria, quando): o servidor recusou agora
         self.pointer = None    # (x, y) do cursor na janela do jogo, ou None (chat fechado: nao traduz chat)
         self._zone = None      # onde fica a coluna do chat na tela (ver _chat_zone_lines)
         self.view = None       # (largura, altura) da janela do jogo, para saber onde fica o chat
@@ -368,7 +375,11 @@ class Translator:
                     if (pt and pt.strip().lower() != text.strip().lower() and len(pt) <= len(text) * 3 + 20
                             and same_numbers and not re.search(r"\bI[O0]\b|\bO[I1]\b", pt)
                             and not mostly_untranslated(text, pt, known | keep)):
-                        if keep_it is True:
+                        if keep_it is True and getattr(self.mt, "fell_back", False):
+                            if len(self.temp) > 600:
+                                self.temp.clear()
+                            self.temp[key] = (pt, time.monotonic())
+                        elif keep_it is True:
                             self.lib.add_auto(text, pt, "auto-tela")
                         else:
                             if len(self.chat) > 400:
@@ -463,6 +474,13 @@ class Translator:
                 and re.fullmatch(r"\d+", toks[1]) and toks[2][:1].isupper()
                 and not any(w.lower() in FUNC_WORDS for w in toks[2:])):
             return (" ".join([verbs[toks[0].lower()]] + toks[1:]), "manual", [(0, 1, verbs[toks[0].lower()], "manual")])
+        # o mesmo objetivo na lista de missoes da tela ("0 / 12 - Gather Stone Rubble", as vezes com a caixinha
+        # de marcar lida como uma letra na frente): so o verbo; a contagem e o nome do item ficam do jogo
+        m = _TRACKER.match(text)
+        if m and m.group(1)[:1].isupper() and m.group(1).lower() in verbs:
+            k = toks.index(m.group(1))
+            pt = verbs[m.group(1).lower()]
+            return " ".join(toks[:k] + [pt] + toks[k + 1:]), "manual", [(k, k + 1, pt, "manual")]
         for seg in segs:
             words = [toks[k] for k in seg]
             phrase = " ".join(words)
@@ -692,6 +710,11 @@ class Translator:
             return None
         if self.is_name(text) or is_noise(text, self.unknown_word):
             return None  # nome proprio ou nome de jogador: fica em ingles, sem caixa por cima
+        tmp = self.temp.get(normalize(text))
+        if tmp:
+            if time.monotonic() - tmp[1] < TEMP_KEEP:
+                return tmp[0], "auto"  # traducao offline provisoria: vale por enquanto, nao foi gravada
+            del self.temp[normalize(text)]  # passou o tempo: pede de novo (o servidor pode ter voltado)
         self._maybe_queue(text)
         return None
 
@@ -950,8 +973,17 @@ class Translator:
                 continue
             if not words or t["text"].isupper() or not all(w[:1].isupper() for w in words if w[:1].isalpha()):
                 continue
+            if len(words) <= 5 and any(m is not t and m["text"].isupper() and len(m["text"]) > 3
+                                       and m["h"] < t["h"] * 0.9 and abs(m["x"] - t["x"]) < t["h"]
+                                       and 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.2 for m in lines):
+                out[id(t)] = True  # nome com legenda pequena em MAIUSCULAS embaixo: missao, item, recompensa
+                continue
             for m in lines:
                 toks = m["text"].split()
+                if m is not t and _TRACKER.match(m["text"]) and 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.6 \
+                        and abs(m["x"] - t["x"]) < t["h"] * 3.5:
+                    out[id(t)] = True  # titulo de missao em cima do objetivo "0 / 8 - Gather Cotton": e nome
+                    break
                 if m is t or not toks or not (re.match(r"[+\-]?\d", toks[0]) and is_value_token(toks[0])):
                     continue
                 if 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.6 and abs(m["x"] - t["x"]) < t["h"] * 2.5:

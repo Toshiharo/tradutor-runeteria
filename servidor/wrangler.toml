@@ -15,6 +15,6 @@ id = "643a2c08345340c792de86eea8d47323"
 [vars]
 DEEPL_URL = "https://api-free.deepl.com/v2/translate"
 # caracteres por dia (500 mil por mes / 30 ~ 16 mil; o dia pode passar um pouco se o resto do mes sobrar)
-LIMITE_DIA = "20000"
+LIMITE_DIA = "30000"
 # caracteres por jogador por dia (protege a cota de quem tentar gastar de proposito)
-LIMITE_IP_DIA = "5000"
+LIMITE_IP_DIA = "12000"

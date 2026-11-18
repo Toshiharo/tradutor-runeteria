@@ -1,5 +1,7 @@
 # Tradutor Runeteria
 
+> Projeto independente, sem relação com o Runeteria. O servidor apenas deu permissão para o tradutor existir.
+
 As telas do servidor **Runeteria** (Hytale) em português do Brasil. O programa lê o texto da tela do jogo e desenha a tradução por cima, com a mesma fonte, cor, tamanho e posição do texto original: inventário, missões, lojas, guilda, classes, habilidades, tooltips e o resto da interface.
 
 Precisa do **Windows 10 ou 11** (64 bits). O instalador tem cerca de 100 MB.
@@ -87,4 +89,4 @@ Testes: `.venv\Scripts\python.exe -m unittest discover -s tests`
 
 ---
 
-Feito por Toshi, da equipe de UI/UX do Runeteria, com autorização do dono do servidor. Não é um produto oficial do Hytale.
+Projeto independente, feito por Toshi. Não tem relação com o Runeteria nem com o Hytale e não é um produto oficial de nenhum dos dois: o servidor apenas deu permissão para o tradutor existir. Dúvidas e problemas do tradutor são com o autor, pelas [issues](https://github.com/Toshiharo/tradutor-runeteria/issues) deste repositório.

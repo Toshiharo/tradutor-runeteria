@@ -267,6 +267,12 @@ _sig(gdi32.GetDIBits, ctypes.c_int, wintypes.HDC, wintypes.HBITMAP, wintypes.UIN
      wintypes.LPVOID, ctypes.c_void_p, wintypes.UINT)
 
 
+def open_capture(hwnd):
+    """Captura da janela pelo Windows Graphics Capture (ver captura.py). Levanta erro se este Windows nao der."""
+    from captura import WindowCapture
+    return WindowCapture(hwnd)
+
+
 def grab_window(hwnd, w, h):
     """So o conteudo da janela do jogo (PrintWindow), sem nada do que estiver por cima dela - nem o
     overlay. Assim o overlay pode aparecer em gravacoes (OBS, Discord) sem o OCR ler a propria traducao.
