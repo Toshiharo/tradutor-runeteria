@@ -4,6 +4,9 @@ As telas do servidor **Runeteria** (Hytale) em português do Brasil. O programa 
 
 Precisa do **Windows 10 ou 11** (64 bits). O instalador tem cerca de 100 MB.
 
+> [!WARNING]
+> **Versão beta, ainda em testes.** Algumas traduções podem sair erradas ou ficar em inglês, e textos longos (descrições de missão, avisos) são traduzidos automaticamente e podem sair estranhos. Se achar um problema, avise em uma [issue](https://github.com/Toshiharo/tradutor-runeteria/issues) ou no Discord do Runeteria. Se atrapalhar, aperte **F8** para desligar a tradução na hora.
+
 ## Instalar
 
 1. Baixe o **TradutorRuneteria-Instalar.exe** na página de [versões](https://github.com/Toshiharo/tradutor-runeteria/releases/latest).

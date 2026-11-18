@@ -156,8 +156,12 @@ class App:
             tk.Label(panel, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(2), T.S(0)))
         tk.Label(panel, text="As telas do jogo em português do Brasil", font=T.font("caption"),
                  fg=T.MUTED, bg=T.PANEL).pack()
-        tk.Label(panel, text=f"v{config.APP_VERSION}", font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL).place(
-            relx=1.0, x=-14, y=10, anchor="ne")
+        if config.APP_STAGE:
+            tk.Label(panel, text="Versão de testes: algumas traduções ainda podem sair erradas",
+                     font=T.font("caption"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(T.S(2), 0))
+        stage = f" {config.APP_STAGE.upper()}" if config.APP_STAGE else ""
+        tk.Label(panel, text=f"v{config.APP_VERSION}{stage}", font=T.font("caption"), fg=T.DISABLED,
+                 bg=T.PANEL).place(relx=1.0, x=-14, y=10, anchor="ne")
         T.gold_divider(panel).pack(fill="x", padx=T.S(16), pady=(T.S(10), T.S(12)))
 
         # estado: o que o tradutor esta fazendo agora, em uma frase
