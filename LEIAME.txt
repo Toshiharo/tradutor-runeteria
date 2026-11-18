@@ -56,4 +56,5 @@ Suas correções ficam em %APPDATA%\RuneteriaTradutor (apague a pasta se quiser)
 
 Se algo der errado, mande o arquivo erros.log da pasta "Traduções".
 
-Projeto de fã. Os textos originais do jogo pertencem aos seus donos.
+Feito por Toshi, da equipe de UI/UX do Runeteria, com autorização do dono do servidor.
+Não é um produto oficial do Hytale.

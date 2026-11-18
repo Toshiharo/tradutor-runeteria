@@ -1,6 +1,8 @@
 # Tradutor Runeteria — contexto para o Claude Code
 
-Responda sempre em português (pt-BR). Feito pelo dono (Windows) para ele e para ser
+Responda sempre em português (pt-BR). O autor é o dev principal de UI/UX do Runeteria e o dono do servidor
+autorizou o programa: não é "projeto de fã" (não escrever isso em textos públicos), mas também não é produto
+oficial do Hytale. Feito pelo autor (Windows) para ele e para ser
 compartilhado com outros jogadores brasileiros. Todas as traduções são em português do Brasil (nunca pt-PT).
 
 ## O que é

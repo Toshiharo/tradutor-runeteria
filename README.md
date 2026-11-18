@@ -42,4 +42,4 @@ Achou uma tradução errada? Abra uma [issue](https://github.com/Toshiharo/tradu
 
 Precisa do Windows 10 ou 11 e do Python 3.12. Rode `build.bat`: ele cria o ambiente, baixa o modelo de tradução offline e gera `dist\TradutorRuneteria\`. Com o [Inno Setup](https://jrsoftware.org/isinfo.php) instalado, gera também `dist\TradutorRuneteria-Instalar.exe`.
 
-Projeto de fã. Os textos originais do jogo pertencem aos seus donos.
+Feito por Toshi, da equipe de UI/UX do Runeteria, com autorização do dono do servidor. Não é um produto oficial do Hytale.
