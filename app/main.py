@@ -19,7 +19,7 @@ from library import Library
 from lock import RuneteriaLock
 from pipeline import Translator, tidy_lines
 from style import (DESCENDERS, _rgb, add_colors, avail_width, font_px, init_faces, pick_face,
-                   region_changed, region_thumb, screen_diff)
+                   region_changed, region_thumb, restyle_spans, screen_diff, split_by_color)
 
 KEY_COLOR = "#ff00fe"  # cor "invisivel" do overlay
 
@@ -31,6 +31,16 @@ def _overlap(a, b):
     if ix <= 0 or iy <= 0:
         return False
     return ix * iy > 0.3 * min(a["w"] * a["h"], b["w"] * b["h"])
+
+
+def _contains_text(big, small):
+    """As palavras de `small` aparecem todas, na ordem, em `big`, e `big` tem mais? ("1 in stock" contem
+    "in stock": e a mesma linha lida por inteiro)"""
+    a, b = big.lower().split(), small.lower().split()
+    if len(a) <= len(b):
+        return False
+    it = iter(a)
+    return all(w in it for w in b)
 
 
 def _inside(a, b):
@@ -57,7 +67,7 @@ class App:
         self.last_boxes = []
         self.drawn_sig = None
         self._faces_memo, self._faces_pruned = {}, 0.0  # fonte escolhida por texto (ver stable_face)
-        self._geo_memo = []  # posicao/alinhamento escolhidos por texto (ver stable_geometry)
+        self._slots, self._slot_n = [], 0  # o que esta em cada lugar da tela (ver settle)
         self._scale, self._scale_for = 1.6, None  # escala do OCR (ver ocr_scale)
         self.mt = None
         self.ocr = None
@@ -430,7 +440,6 @@ class App:
         last_ocr = 0.0
         urgent_since = None  # quando a tela mudou e ainda nao foi relida
         removed = False      # tirou traducao da tela e ainda nao releu (ai a pressa e maior)
-        shown = []           # [(caixa, miniatura da regiao)] do que esta desenhado agora
         last_rect = None
         ocr_pass = 0
         while True:
@@ -456,7 +465,7 @@ class App:
                         self.ui_q.put(("hide",))
                         hidden = True
                     prev_sig = ocr_sig = None
-                    shown = []
+                    self._slots = []
                     continue
                 hidden = False
                 rect = self.w.client_rect(hwnd)
@@ -464,7 +473,7 @@ class App:
                     continue
                 x, y, w, h = rect
                 if rect != last_rect:  # janela mexeu ou mudou de tamanho: tudo que esta desenhado vale menos
-                    shown, ocr_sig, last_rect = [], None, rect
+                    self._slots, ocr_sig, last_rect = [], None, rect
                     urgent_since = urgent_since or time.monotonic()
                 now = time.monotonic()
                 periodic = now - last_ocr >= self.cfg["intervalo_segundos"]
@@ -483,13 +492,10 @@ class App:
                 sig = img.reduce(20).convert("L")  # assinatura da tela inteira (~1 ms)
 
                 # 1) conferencia rapida: tira na hora o que ficou em cima de texto que ja nao existe
-                if shown and self.capture_safe:
-                    keep = [(b, t) for b, t in shown if not region_changed(img, t)]
-                    if len(keep) <= len(shown) * 0.4:
-                        keep = []  # a maioria mudou de uma vez: o menu fechou ou trocou inteiro
-                    if len(keep) != len(shown):
-                        shown = keep
-                        self.ui_q.put(("boxes", rect, [b for b, _ in keep]))
+                if self._slots and self.capture_safe:
+                    left = self.drop_changed(img)
+                    if left is not None:
+                        self.ui_q.put(("boxes", rect, left))
                         urgent_since, removed = urgent_since or now, True
 
                 # 2) quando reler a tela
@@ -517,20 +523,16 @@ class App:
                     lines = tidy_lines(self.ocr.recognize(img, self.ocr_scale(w, h) * (1.2 if ocr_pass % 2 else 1.0)))
                     self.learn_text_size(lines, w, h)
                     if self.cfg["usar_cores_da_tela"]:
-                        add_colors(img, lines)
+                        lines = add_colors(img, split_by_color(img, lines))
                     self.last_lines = lines
                     boxes = self.translator.boxes(lines)
+                    if self.cfg["usar_cores_da_tela"]:
+                        restyle_spans(img, boxes)
                     ocr_sig = sig
-                boxes = self.stable_geometry(boxes)
+                if not self.capture_safe:
+                    self._slots = []  # Windows antigo: sem conferencia de regiao, vale so a leitura nova
                 last_ocr, urgent_since, removed = now, None, False
-                fresh = [(b, region_thumb(img, b["x"], b["y"], b["w"], b["h"])) for b in boxes]
-                # traducao da leitura anterior que esta leitura nao achou, mas cuja regiao nao mudou:
-                # o texto continua la (o OCR e que oscila) -> continua na tela
-                kept = [(b, t) for b, t in shown
-                        if self.capture_safe and not region_changed(img, t)
-                        and not any(_overlap(b, nb) for nb, _ in fresh)]
-                shown = fresh + kept
-                self.ui_q.put(("boxes", rect, [b for b, _ in shown]))
+                self.ui_q.put(("boxes", rect, self.settle(img, boxes)))
             except Exception:
                 log_error()
                 time.sleep(2)
@@ -616,53 +618,65 @@ class App:
         wn = self.font(px, False, False).measure(text)
         return abs(wb - width) <= abs(wn - width)
 
-    GEO_KEYS = ("x", "y", "w", "h", "line_h", "align", "iy", "ih", "room_l", "room_r", "ref")
+    def settle(self, img, boxes):
+        """Decide o que fica na tela depois de uma leitura. Devolve as caixas a desenhar.
 
-    def stable_geometry(self, boxes):
-        """Mesmo lugar e mesmo alinhamento para o mesmo texto, leitura apos leitura.
-
-        As leituras alternam duas escalas do OCR e cada uma recorta o texto um pouco diferente: numa o
-        icone ao lado entra na caixa ("Agilidade" comecava 23 px antes) e na outra nao, e o alinhamento
-        virava esquerda/direita ("TALENTOS") ou centro/direita ("NV. 20", "LOJA"). Como a traducao tem
-        outra largura, isso fazia o texto pular de lado. Aqui cada texto guarda as posicoes ja vistas e usa
-        a primeira; outra so ganha com 2 votos de folga, ou se for bem menor e dentro dela (sem o icone).
+        Regra: cada LUGAR da tela guarda a traducao que esta nele, e ela so muda quando os pixels do jogo
+        naquele lugar mudam. O OCR le a mesma tela parada de jeitos diferentes a cada passada ("1 in stock",
+        depois so "in stock"; "1 of 26" / "I of 26"; a caixa um pouco mais larga ou mais estreita), e antes
+        cada variacao redesenhava a traducao: texto, posicao, fonte e cor ficavam trocando sem parar.
+        Agora a leitura nova so substitui a que esta no lugar se:
+        - for uma leitura mais completa (contem a atual e mais texto), ou
+        - for a mesma traducao numa caixa bem menor, dentro da atual (a atual tinha pegado o icone), ou
+        - discordar da atual 3 leituras seguidas (a primeira e que estava errada).
         """
-        now = time.monotonic()
-        memo = [r for r in self._geo_memo if now - r["seen"] < 30]
-        out = []
+        slots = [sl for sl in self._slots if not region_changed(img, sl["thumb"])]
+        used = set()
         for b in boxes:
-            rec = None
-            for r in memo:
-                g = r["best"]
-                # mesmo texto lido, ou mesma traducao (o OCR as vezes pega o icone junto: "O Agility")
-                if (r["en"] == b["en"] or r.get("pt") == b["pt"]) and _overlap(g, b):
-                    rec = r
-                    break
-            if rec is None:
-                rec = {"en": b["en"], "pt": b["pt"], "votes": {}, "snap": {}, "order": []}
-                memo.append(rec)
-            vk = (round(b["x"] / 3), round(b["y"] / 3), round(b["w"] / 3), b.get("align"))
-            if vk not in rec["votes"]:
-                rec["votes"][vk] = 0
-                rec["snap"][vk] = {k: b[k] for k in self.GEO_KEYS if k in b}
-                rec["order"].append(vk)
-            rec["votes"][vk] += 1
-            rec["seen"] = now
-            cur = rec.get("best_key")
-            if cur is None:
-                cur = vk  # primeira leitura define o lugar
-            elif vk != cur:
-                new, old_ = rec["snap"][vk], rec["snap"][cur]
-                if _inside(new, old_) and new["w"] < old_["w"] * 0.92:
-                    cur = vk  # caixa bem menor dentro da atual: e a sem o icone (depois disso nao volta)
-                elif rec["votes"][vk] >= rec["votes"][cur] + 2:
-                    cur = vk  # outra posicao so ganha com folga: oscilacao de 1 px nunca muda nada
-            rec["best_key"], rec["best"] = cur, rec["snap"][cur]
-            nb = dict(b)
-            nb.update(rec["best"])
-            out.append(nb)
-        self._geo_memo = memo[-3000:]
-        return out
+            sl = next((x for x in slots if id(x) not in used and _overlap(x["box"], b)), None)
+            if sl is None:
+                self._slot_n += 1
+                nb = dict(b)
+                nb["_slot"] = self._slot_n
+                sl = {"box": nb, "thumb": region_thumb(img, b["x"], b["y"], b["w"], b["h"]), "cand": None, "n": 0}
+                slots.append(sl)
+                used.add(id(sl))
+                continue
+            used.add(id(sl))
+            cur = sl["box"]
+            replace = False
+            if b["pt"] == cur["pt"]:
+                sl["cand"], sl["n"] = None, 0
+                replace = _inside(b, cur) and b["w"] < cur["w"] * 0.92
+            elif _contains_text(b["en"], cur["en"]):
+                replace = True
+            elif not _contains_text(cur["en"], b["en"]):
+                if sl["cand"] == b["pt"]:
+                    sl["n"] += 1
+                else:
+                    sl["cand"], sl["n"] = b["pt"], 1
+                replace = sl["n"] >= 3
+            if replace:
+                nb = dict(b)
+                if b["pt"] != cur["pt"]:
+                    self._slot_n += 1  # outro texto: fonte e cor sao escolhidas de novo
+                    nb["_slot"] = self._slot_n
+                else:
+                    nb["_slot"] = cur["_slot"]
+                sl.update(box=nb, thumb=region_thumb(img, b["x"], b["y"], b["w"], b["h"]), cand=None, n=0)
+        self._slots = slots
+        return [sl["box"] for sl in slots]
+
+    def drop_changed(self, img):
+        """Conferencia rapida entre leituras: tira os lugares cujo texto do jogo mudou. Devolve as caixas
+        que continuam, ou None se nada mudou."""
+        keep = [sl for sl in self._slots if not region_changed(img, sl["thumb"])]
+        if len(keep) == len(self._slots):
+            return None
+        if len(keep) <= len(self._slots) * 0.4:
+            keep = []  # a maioria mudou de uma vez: o menu fechou ou trocou inteiro
+        self._slots = keep
+        return [sl["box"] for sl in keep]
 
     def _memo(self, b):
         now = time.monotonic()
@@ -671,7 +685,7 @@ class App:
             for k in [k for k, v in memo.items() if now - v["seen"] > 30]:
                 del memo[k]
             self._faces_pruned = now
-        key = (b["en"], round(b["x"] / 8), round(b["y"] / 8))
+        key = b.get("_slot") or (b["en"], round(b["x"] / 8), round(b["y"] / 8))  # por lugar da tela
         rec = memo.get(key)
         if rec is None:
             rec = memo[key] = {"votes": {}, "faces": {}, "px": {}, "colors": {}, "seen": now}
@@ -720,8 +734,10 @@ class App:
         x0 = x
         for i, ch in enumerate(text):
             if ch != " ":
-                c.create_text(round(x0 + fnt.measure(text[:i]) + track * i), y, text=ch, anchor="nw",
-                              font=fnt, fill=fill, tags=tag)
+                # posicao natural da letra dentro da palavra (medindo ate ela, o ajuste entre pares como
+                # "PA" entra na conta; medindo so o que vem antes, abria um buraco: "ETAP AS")
+                pos = fnt.measure(text[:i + 1]) - fnt.measure(ch)
+                c.create_text(round(x0 + pos + track * i), y, text=ch, anchor="nw", font=fnt, fill=fill, tags=tag)
         return tag, (x, y, x + total, y + fnt.metrics("linespace"))
 
     def draw(self, rect, boxes):
@@ -748,7 +764,9 @@ class App:
         min_px = self.cfg["tamanho_fonte_min"]
         screen_colors = self.cfg["usar_cores_da_tela"]
         auto_font = self.cfg["fonte_overlay"] == "auto"
-        for b in boxes:
+        todo = list(boxes)
+        while todo:
+            b = todo.pop(0)
             auto = b["origin"] == "auto"
             if screen_colors and "bg" in b:
                 # mesmas cores do texto original; traducao automatica aparece em italico
@@ -764,7 +782,13 @@ class App:
             ref_text, ref_w = b.get("ref", (b["en"], b["w"]))
             ink_y, ink_h = b.get("iy", b["y"]), b.get("ih", b["line_h"])
             # mesma fonte, peso e tamanho do original (medidos com os arquivos de fonte do jogo)
-            face = self.stable_face(b, pick_face(ref_text, ref_w, ink_h, b.get("ink"))) if auto_font else None
+            face = None
+            if auto_font:
+                like = None
+                if b.get("line_ref"):
+                    lf = pick_face(*b["line_ref"])
+                    like = lf["family"].split()[0] if lf else None
+                face = self.stable_face(b, pick_face(ref_text, ref_w, ink_h, b.get("ink"), like))
             if face:
                 px = max(min_px, face["px"])
                 fkw = {"family": face["family"], "weight": face["weight"]}
@@ -784,6 +808,13 @@ class App:
                 # uma linha continua uma linha: usa o espaco livre; se nao couber, primeiro tira o
                 # espacamento entre letras, depois diminui a letra ate 70%. So quebra em duas se ainda
                 # assim nao couber E houver espaco para quebrar (nunca no meio de uma palavra).
+                if b.get("alt") and (width_of(px, 0) > avail or width_of(px, 0) < b["w"] - px * 0.25):
+                    # trecho que so caberia com a letra menor que a do resto da linha ("Limpe 8" pequeno
+                    # ao lado de "Medium Rubble"), ou bem mais curto que o original (sobrava um buraco:
+                    # "Colete 12  Stone Rubble"): redesenha a linha inteira no tamanho certo. Se a linha
+                    # tambem nao couber, volta para o trecho
+                    todo.insert(0, dict(b["alt"], back=dict(b, alt=None)))
+                    continue
                 if width_of(px, track) > avail:
                     track = max(0, min(track, (avail - width_of(px, 0)) / n_gaps)) if n_gaps else 0
                 floor = max(min_px, int(round(px * 0.8)))  # menor que 80% fica ilegivel: melhor o original
@@ -792,7 +823,9 @@ class App:
                 if width_of(px, track) > avail:
                     if len(b["en"].split()) >= 5 and " " in b["pt"] and not b.get("inline"):
                         wrap, track = avail, 0  # frase: pode quebrar em duas linhas
-                    elif width_of(px, track) > avail * 1.08:
+                    elif width_of(px, track) > avail * (1.0 if b.get("inline") else 1.08):
+                        if b.get("back"):
+                            todo.insert(0, b["back"])
                         continue  # rotulo curto que nao cabe nem com a letra menor: fica o original
             else:
                 wrap = avail
@@ -816,7 +849,7 @@ class App:
                 # mesmo que a traducao tenha acento ou letra que desce e o original nao
                 baseline = ink_y + ink_h - face["below"]
                 dy = baseline - fnt.metrics("ascent") - bx[1]
-                top, bottom = baseline - px * 0.98, baseline + px * 0.27
+                top, bottom = baseline - px * face.get("up", 0.98), baseline + px * face.get("down", 0.27)
             else:
                 # centraliza na altura do texto original (a caixa do tk inclui espaco acima/abaixo das letras)
                 dy = (b["y"] + b["h"] / 2) - (bx[1] + bx[3]) / 2

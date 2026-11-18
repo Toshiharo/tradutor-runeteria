@@ -16,7 +16,13 @@ FUNC = {"a", "an", "and", "or", "to", "for", "in", "on", "at", "by", "with", "fr
         "our", "not", "no", "all", "is", "are", "be", "this", "that", "these", "it", "its", "more", "less",
         "per", "than", "up", "out", "off", "into", "if", "when", "then", "here", "there", "now", "new",
         "can", "will", "has", "have", "get", "use", "each", "every", "any", "some", "only", "yet"}
-NAME_JOIN = {"of", "the", "de"}  # podem aparecer no meio de nome ("Aegis of Faith", "The Deepworks")
+NAME_JOIN = {"of", "the", "de"}
+# palavras de interface: com elas, "Ability Slots" e rotulo e nao nome. Tipos de item (bow, dagger, sword,
+# pickaxe) NAO entram aqui: "Rare Necromantic Daggers" e "Iron Pickaxe" sao nomes de item e ficam em ingles.
+UI_TERMS = {"slot", "slots", "quest", "quests", "bag", "bags", "stall", "stalls", "listing", "listings",
+            "mailbox", "guild", "guilds", "party", "cooldown", "cooldowns", "perk", "perks", "plot", "plots",
+            "stats", "gear", "ability", "abilities", "skill", "skills", "damage", "health", "treasury",
+            "leaderboard", "dungeon", "dungeons", "shop", "shops", "wallet", "stock", "level", "levels"}  # podem aparecer no meio de nome ("Aegis of Faith", "The Deepworks")
 
 _VALUE_RE = re.compile(r"""^(
       [+\-−~]?\(?[+\-−]?\d[\d.,:/%\-]*\)?(?:[a-zA-Z]{1,2}\b)?\.{0,3}   # 143  +7  7.7s  1-22%  (1-6%)  4/4  18:12  32...

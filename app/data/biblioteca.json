@@ -7650,7 +7650,7 @@
 "reviewed": true
 },
 "GATHERING": {
-"pt": "ENCONTRO",
+"pt": "COLETA",
 "source": "manual",
 "reviewed": true
 },
@@ -7965,17 +7965,17 @@
 "reviewed": true
 },
 "JOIN MODE": {
-"pt": "MODO ENTRADA LIVRE",
+"pt": "MODO DE ENTRADA",
 "source": "manual",
 "reviewed": true
 },
 "REQUEST MODE": {
-"pt": "MODO PEDIDO",
+"pt": "POR PEDIDO",
 "source": "manual",
 "reviewed": true
 },
 "UNLIST": {
-"pt": "TIRAR DO QUADRO",
+"pt": "RETIRAR",
 "source": "manual",
 "reviewed": true
 },
@@ -12920,12 +12920,12 @@
 "reviewed": true
 },
 "You Buy": {
-"pt": "Você compra",
+"pt": "Compra",
 "source": "manual",
 "reviewed": true
 },
 "You sell": {
-"pt": "Você vende",
+"pt": "Venda",
 "source": "manual",
 "reviewed": true
 },
@@ -13866,6 +13866,66 @@
 },
 "ABILITIES FOR R": {
 "pt": "HABILIDADES DO R",
+"source": "manual",
+"reviewed": true
+},
+"You Sell": {
+"pt": "Venda",
+"source": "manual",
+"reviewed": true
+},
+"Ratings": {
+"pt": "avaliações",
+"source": "manual",
+"reviewed": true
+},
+"Buy": {
+"pt": "Comprar",
+"source": "manual",
+"reviewed": true
+},
+"ON THIS SERVER": {
+"pt": "NESTE SERVIDOR",
+"source": "manual",
+"reviewed": true
+},
+"contributors": {
+"pt": "contribuidores",
+"source": "manual",
+"reviewed": true
+},
+"contributor": {
+"pt": "contribuidor",
+"source": "manual",
+"reviewed": true
+},
+"Officer to Founder": {
+"pt": "Oficial para Fundador",
+"source": "manual",
+"reviewed": true
+},
+"Join Mode": {
+"pt": "Modo de entrada",
+"source": "manual",
+"reviewed": true
+},
+"OPEN": {
+"pt": "ABERTO",
+"source": "manual",
+"reviewed": true
+},
+"Not Listed": {
+"pt": "Fora do quadro",
+"source": "manual",
+"reviewed": true
+},
+"Not listed": {
+"pt": "Fora do quadro",
+"source": "manual",
+"reviewed": true
+},
+"Listed": {
+"pt": "No quadro",
 "source": "manual",
 "reviewed": true
 }

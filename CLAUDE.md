@@ -93,7 +93,17 @@ tecla e número inteiro vizinhos: "530 dano · signature completa"). Valores com
 pixels do jogo — o OCR erra esses ("8.65", "g.6s"). Título e subtítulo de card com cor diferente não viram parágrafo.
 Título de card logo acima de linha que começa com número (`Translator._card_titles`) é nome de skill/item: fica em
 inglês mesmo sendo palavra comum ("Hemorrhage"). Fileira de rótulos com vão grande entre eles (abas do topo que o OCR
-juntou) vira uma caixa por rótulo (`_label_row`), nunca vai para a tradução automática. Memória automática `"v": 3`.
+juntou) vira uma caixa por rótulo (`_label_row`), nunca vai para a tradução automática. Memória automática `"v": 4`.
+Nome com etiqueta logo abaixo ("DAMAGE" sobre "[DMG] - PVP & PVE", guilda) fica em inglês até contra a biblioteca.
+Objetivo de missão "Verbo N Item" ("Mine 15 Rock Blocks") traduz só o verbo, com `verbos_de_objetivo` do glossário.
+Trecho que só caberia com letra menor que a do resto da linha, ou que deixaria buraco, troca pela linha inteira (`alt`);
+a família da fonte do trecho vem da linha inteira (`line_ref`). Em MAIÚSCULAS a altura ignora a cauda do Q (`ink_rows caps`).
+
+## Tela parada não pisca nem muda (`App.settle`)
+Cada lugar da tela é um "slot" que guarda a tradução até os pixels do jogo ali mudarem (`region_changed`). Leitura
+nova só troca se for mais completa, se o mesmo texto couber numa caixa bem mais estreita, ou se discordar 3 leituras
+seguidas. Fonte e cor ficam memorizadas por slot (`stable_face`/`stable_colors`). Medir com 8 leituras da mesma
+captura: nada deve piscar nem trocar de texto/lugar/fonte/cor (só a troca única por leitura mais completa).
 
 ## Usuário final é leigo
 Quem usa não é técnico: instalar e usar tem que ser quase um clique. Nada de pedir PowerShell, editar JSON ou ler log

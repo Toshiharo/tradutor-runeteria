@@ -7,6 +7,7 @@ import time
 from library import normalize
 from style import block_align, guess_align
 from variaveis import FUNC as FUNC_WORDS
+from variaveis import UI_TERMS
 from variaveis import SEP_RE, find_names, is_name_phrase, is_noise, is_value_token, only_values
 
 LETTERS_RE = re.compile(r"[A-Za-z]{2,}")
@@ -31,6 +32,9 @@ def _from_words(words):
             "words": list(words)}
 
 
+_TALL = re.compile(r"[A-Z0-9bdfhklt]")
+
+
 def tidy_lines(lines):
     """Arruma as linhas do OCR antes de traduzir, usando a posicao de cada palavra.
 
@@ -50,8 +54,16 @@ def tidy_lines(lines):
         hs = sorted(w["h"] for w in words)
         hmed = hs[(len(hs) - 1) // 2]  # mediana "para baixo": um icone alto nao puxa a referencia
         segs, cur = [], [words[0]]
+        tall = words[0]["h"] if _TALL.search(words[0]["text"]) else None
         for prev, w in zip(words, words[1:]):
-            if w["x"] - (prev["x"] + prev["w"]) > hmed * 3.2:
+            cut = w["x"] - (prev["x"] + prev["w"]) > hmed * 3.2
+            if _TALL.search(w["text"]):
+                # titulo grande + legenda pequena na mesma linha ("Ore Mastery +1%" + "Current bonus"):
+                # so compara palavras com letra alta/maiuscula/numero, cuja altura e a da fonte
+                if tall and not 0.68 < w["h"] / tall < 1.47:
+                    cut = True
+                tall = w["h"]
+            if cut:
                 segs.append(cur)
                 cur = []
             cur.append(w)
@@ -259,8 +271,8 @@ class Translator:
         return r
 
     def _fixed_terms(self):
-        """Termos de jogo que tem traducao (slot -> espaco): quem tem um deles e rotulo, nao nome."""
-        return [en for en, pt in getattr(self.lib, "terms", {}).items() if pt.lower() != en.lower()]
+        """Palavras de interface (slot, quest, shop...): quem tem uma delas e rotulo, nao nome proprio."""
+        return UI_TERMS
 
     def is_name(self, text):
         return is_name_phrase(text, self._fixed_terms(), self.unknown_word)
@@ -316,6 +328,14 @@ class Translator:
             segs.append(cur)
         spans = []  # (primeira palavra, depois da ultima, traducao, origem)
         multi = len(segs) > 1
+        # objetivo de missao: verbo + quantidade + nome do item ("Mine 15 Rock Blocks"). So o verbo e
+        # traduzido (da lista de verbos de objetivo: na biblioteca "Mine" e "Meus", de "meus itens");
+        # o nome do item fica como esta no jogo
+        verbs = getattr(self.lib, "verbs", {})
+        if (len(toks) >= 3 and toks[0][:1].isupper() and toks[0].lower() in verbs
+                and re.fullmatch(r"\d+", toks[1]) and toks[2][:1].isupper()
+                and not any(w.lower() in FUNC_WORDS for w in toks[2:])):
+            return (" ".join([verbs[toks[0].lower()]] + toks[1:]), "manual", [(0, 1, verbs[toks[0].lower()], "manual")])
         for seg in segs:
             words = [toks[k] for k in seg]
             phrase = " ".join(words)
@@ -330,8 +350,11 @@ class Translator:
                 continue
             # pedaco com valores no meio ("Armor 15 Vitality +7"): termo a termo, mas so em linha
             # de atributo (tem numero e nao tem palavra de frase), nunca em frase comum
-            if not any(is_value_token(w) for w in words) or any(w.lower() in FUNC_WORDS for w in words):
+            if not any(is_value_token(w) for w in words):
                 return None
+            # com palavra de frase (you, your, of...) nao se traduz palavra por palavra: cada trecho entre
+            # valores tem que ser, inteiro, um texto da biblioteca ("You Buy" + preco)
+            whole_only = any(w.lower() in FUNC_WORDS for w in words)
             i = 0
             while i < len(words):
                 if is_value_token(words[i]):
@@ -342,8 +365,10 @@ class Translator:
                     j += 1
                 run, done = words[i:j], False
                 for end in range(len(run), 0, -1):  # maior pedaco conhecido primeiro
+                    if whole_only and end < len(run):
+                        break
                     ph = " ".join(run[:end])
-                    hit = self._lookup_piece(ph)
+                    hit = self._lookup_piece(ph) if not whole_only or self.lib.knows(ph) else None
                     # no comeco da linha de atributo vem o nome da skill/item ("Hemorrhage 145 damage")
                     lead = i == 0 and all(w[:1].isupper() for w in run[:end]) and not ph.isupper()
                     if hit or self.is_name(ph) or (lead and end == len(run)):
@@ -353,6 +378,13 @@ class Translator:
                         done = True
                         break
                 if not done:
+                    # "BUY 1 BOOMSHROOM PLAGUE F...": depois de um trecho conhecido e de um valor, o que
+                    # sobra ate o fim e o nome do item - fica como esta
+                    # (o valor antes tem numero, e o resto nao e frase: "Your guild - here is what..." nao)
+                    if (spans and i > 0 and is_value_token(words[i - 1]) and re.search(r"\d", words[i - 1])
+                            and j == len(words) and not any(w.lower() in FUNC_WORDS for w in words[i:j])):
+                        i = j
+                        continue
                     return None
         if not spans:
             return None  # nada traduzido: deixa o original
@@ -406,14 +438,22 @@ class Translator:
                 del self.seen[k]
 
     def _one(self, text, allow_mt=True, parts=True, title=False):
-        hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86))
+        if title == "name":
+            return None  # nome com etiqueta embaixo (guilda "DAMAGE" / "[DMG]"): nem a biblioteca traduz
+        exact = self.lib.knows_reviewed(text)  # a memoria automatica nao passa na frente do "por partes"
+        hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86)) if exact else None
         if hit:
             return hit[0], hit[1]
         if title:
             return None  # titulo de card de skill/item: nome proprio, fica em ingles
-        r = self.compose(text) if parts else None  # linha de tooltip/atributo: monta por partes
+        # por partes ANTES do "parecido": em "You Buy 12s" so "You Buy" e coberto; o preco e a moeda
+        # ficam com os pixels do jogo (o parecido cobria a linha toda e redesenhava "12S")
+        r = self.compose(text) if parts else None
         if r:
             return r  # (traducao, origem, trechos)
+        hit = self.lib.lookup(text, self.cfg.get("similaridade_minima", 86))
+        if hit:
+            return hit[0], hit[1]
         if not allow_mt:
             return None
         if self.is_name(text) or is_noise(text, self.unknown_word):
@@ -438,6 +478,11 @@ class Translator:
                 ls = geo.get("lines", [first])
                 d["room_l"] = max(0, min(l.get("room_l", 0) - (l["x"] - geo["x"]) for l in ls))
                 d["room_r"] = max(0, min(l.get("room_r", 0) - (geo["x"] + geo["w"] - l["x"] - l["w"]) for l in ls))
+                # centralizado com um lado bloqueado (icone colado, borda): cresce so para o lado livre
+                if d["align"] == "center" and d["room_l"] < first["h"] and d["room_l"] * 4 < d["room_r"]:
+                    d["align"] = "left"
+                elif d["align"] == "center" and d["room_r"] < first["h"] and d["room_r"] * 4 < d["room_l"]:
+                    d["align"] = "right"
             return d
 
         titles = self._card_titles(lines)
@@ -457,11 +502,11 @@ class Translator:
                     hits += 1
                     out.extend(row)
                     continue
-                r = self._one(ln["text"], allow_mt=not multi, title=id(ln) in titles)
+                r = self._one(ln["text"], allow_mt=not multi, title=titles.get(id(ln), False))
                 if not r:
                     continue
                 hits += 1
-                pieces = self._span_boxes(ln, r, box) if len(r) > 2 else None
+                pieces = self._span_boxes(ln, r, box, guess_align(ln, lines)) if len(r) > 2 else None
                 if pieces is not None:
                     out.extend(pieces)
                 else:
@@ -476,9 +521,15 @@ class Translator:
         """Linhas que sao titulo de card de skill/item: logo acima vem uma linha de atributo que comeca
         com numero ("Hemorrhage" em cima de "145 damage · 7.7s"). O titulo e nome proprio, mesmo quando
         e uma palavra inglesa comum - entao fica em ingles."""
-        out = set()
+        out = {}  # id da linha -> True (titulo de card) ou "name" (nome com etiqueta)
         for t in lines:
             words = t["text"].split()
+            if words and any(m is not t and m["text"].startswith("[")
+                             and 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.6
+                             and abs((m["x"] + m["w"] / 2) - (t["x"] + t["w"] / 2)) < t["h"] * 6
+                             for m in lines):
+                out[id(t)] = "name"  # nome com a etiqueta embaixo ("DAMAGE" sobre "[DMG] - PVP & PVE")
+                continue
             if not words or t["text"].isupper() or not all(w[:1].isupper() for w in words if w[:1].isalpha()):
                 continue
             for m in lines:
@@ -486,7 +537,7 @@ class Translator:
                 if m is t or not toks or not (re.match(r"[+\-]?\d", toks[0]) and is_value_token(toks[0])):
                     continue
                 if 0 <= m["y"] - (t["y"] + t["h"]) < t["h"] * 1.6 and abs(m["x"] - t["x"]) < t["h"] * 2.5:
-                    out.add(id(t))
+                    out[id(t)] = True
                     break
         return out
 
@@ -517,7 +568,7 @@ class Translator:
         return out
 
     @staticmethod
-    def _span_boxes(ln, r, box):
+    def _span_boxes(ln, r, box, line_align="left"):
         """Linha montada por partes: caixas so em cima dos trechos traduzidos.
 
         Cada trecho absorve os vizinhos que podem ser redesenhados sem risco - separador (· • - /),
@@ -531,9 +582,19 @@ class Translator:
         if not words or [w["text"] for w in words] != toks:
             return None
 
-        def safe(t):
-            return t in ("•", "·", "|", "-", "/") or (len(t) == 1 and t.isupper()) or bool(
-                re.fullmatch(r"[+\-]?\d+%?", t))
+        hs = sorted(w["h"] for w in words)
+        hmed = hs[(len(hs) - 1) // 2]
+
+        def safe(k):
+            """Vizinho que pode ser redesenhado: separador, tecla, numero inteiro. Com altura de letra:
+            icone de moeda lido como "0" ou seta lida como "-5" sao mais altos/baixos e ficam de fora."""
+            t = toks[k]
+            if t in ("•", "·", "|", "-", "/"):
+                return True
+            if not 0.6 * hmed <= words[k]["h"] <= 1.3 * hmed:
+                return False
+            # "O" e "I" sozinhos podem ser 0 e 1 mal lidos ("3 dungeons 0 available"): nao redesenha
+            return (len(t) == 1 and t.isupper() and t not in "OI") or bool(re.fullmatch(r"\d+%?", t))
 
         repl = {}  # primeira palavra do trecho -> (fim, traducao, origem)
         for i, j, pt, origin in r[2]:
@@ -545,7 +606,7 @@ class Translator:
             if st in used:
                 continue
             gi = st
-            while gi > 0 and safe(toks[gi - 1]) and not any(gi - 1 in range(a, repl[a][0]) for a in repl):
+            while gi > 0 and safe(gi - 1) and not any(gi - 1 in range(a, repl[a][0]) for a in repl):
                 gi -= 1
             gj, origins = repl[st][0], {repl[st][2]}
             used.add(st)
@@ -554,7 +615,7 @@ class Translator:
                     origins.add(repl[gj][2])
                     used.add(gj)
                     gj = repl[gj][0]
-                elif safe(toks[gj]):
+                elif safe(gj):
                     gj += 1
                 else:
                     break
@@ -575,11 +636,27 @@ class Translator:
             ws = words[gi:gj]
             x = ws[0]["x"]
             geo = {"x": x, "y": ln["y"], "w": ws[-1]["x"] + ws[-1]["w"] - x, "h": ln["h"]}
-            d = box(geo, ln, " ".join(pieces), origin, " ".join(toks[gi:gj]), "left", 1)
+            whole = gi == 0 and gj == len(toks)  # cobre a linha toda: cresce para o lado certo
+            d = box(geo, ln, " ".join(pieces), origin, " ".join(toks[gi:gj]), line_align if whole else "left", 1)
             d["ref"] = (ln["text"], ln["w"])  # a fonte e medida na linha inteira (mesma fonte)
+            if not whole:
+                # a altura vem so das palavras do trecho: a linha pode ter icone mais alto que as letras
+                # (moeda) ou outro texto de outro tamanho, e a traducao sairia desse tamanho
+                top = min(w["y"] for w in ws)
+                d["iy"], d["ih"] = top, max(w["y"] + w["h"] for w in ws) - top
+                d["line_h"] = d["ih"]
+                d["ref"] = (" ".join(w["text"] for w in ws), geo["w"])
+                # a familia da fonte e a da linha inteira (um trecho curto nao tem largura para decidir)
+                d["line_ref"] = (ln["text"], ln["w"], ln.get("ih", ln["h"]), ln.get("ink"))
+                d.pop("ink", None)
             # espaco ate a proxima palavra (que continua aparecendo); no fim, o espaco livre da linha
             d["room_r"] = (words[gj]["x"] - (geo["x"] + geo["w"]) if gj < len(words) else ln.get("room_r", 0))
             d["room_l"] = (x - (words[gi - 1]["x"] + words[gi - 1]["w"]) if gi > 0 else ln.get("room_l", 0))
             d["inline"] = True
             out.append(d)
+        rest = [t for k, t in enumerate(toks) if not any(gi <= k < gj for gi, gj, _ in groups)]
+        if len(groups) == 1 and rest and not any(re.search(r"\d", t) for t in rest):
+            # "BUY 1 BOOMSHROOM PLAGUE F...": o resto e so nome (sem numeros para o OCR errar)
+            alt = box(ln, ln, r[0], r[1], ln["text"], line_align, 1)
+            out[0]["alt"] = alt
         return out

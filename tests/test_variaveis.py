@@ -138,6 +138,23 @@ class CasosDoReplay(unittest.TestCase):
         self.assertNotIn("Pickaxe", TR.names_in("Iron Pickaxe and 4 more Level 8"))
 
 
+class ObjetivoDeMissao(unittest.TestCase):
+    def test_verbo_antes_da_quantidade(self):
+        r = TR.compose("Mine 15 Rock Blocks")
+        self.assertEqual(r[0], "Minere 15 Rock Blocks")   # nao "Meus 15 Rock Blocks"
+        self.assertEqual([(i, j, pt) for i, j, pt, _ in r[2]], [(0, 1, "Minere")])
+        self.assertEqual(TR.compose("Gather 12 Stone Rubble")[0], "Colete 12 Stone Rubble")
+
+    def test_rotulo_mine_continua_valendo_fora_de_objetivo(self):
+        self.assertEqual(LIB.lookup("Mine")[0], "Meus")
+
+
+class FraseComTraco(unittest.TestCase):
+    def test_frase_depois_de_traco_nao_vira_meio_traduzida(self):
+        r = TR.compose("Your guild - here is what happened while you were away.")
+        self.assertIsNone(r)   # nao "Sua guilda - here is what happened..."
+
+
 class Cards(unittest.TestCase):
     def _l(self, text, x, y, h=12):
         return {"text": text, "x": x, "y": y, "w": len(text) * 7, "h": h}

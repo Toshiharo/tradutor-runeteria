@@ -94,26 +94,52 @@ class FonteEstavel(unittest.TestCase):
         self.assertEqual(set(got), {"#9aa6c3"})
 
 
-class PosicaoEstavel(unittest.TestCase):
-    """Tela parada: a traducao nao pode pular de lado entre leituras."""
+class LugarEstavel(unittest.TestCase):
+    """Tela parada: o que esta num lugar so muda quando os pixels do jogo mudam (App.settle)."""
 
     def _app(self):
         import types
+        from PIL import Image
         import main
-        return types.SimpleNamespace(_geo_memo=[], GEO_KEYS=main.App.GEO_KEYS), main
+        app = types.SimpleNamespace(_slots=[], _slot_n=0)
+        return app, main, Image.new("RGB", (400, 100), "#141928")
 
-    def test_alinhamento_que_alterna_fica_parado(self):
-        app, main = self._app()
-        seq = [{"en": "TALENTS", "pt": "TALENTOS", "x": 750, "y": 287, "w": 53, "h": 9, "align": a} for a in "lrlrlr"]
-        got = [main.App.stable_geometry(app, [b])[0]["align"] for b in seq]
-        self.assertEqual(len(set(got)), 1)
+    def _b(self, en, pt, x=100, w=80, align="left"):
+        return {"en": en, "pt": pt, "x": x, "y": 40, "w": w, "h": 12, "align": align}
+
+    def _run(self, seq):
+        app, main, img = self._app()
+        return [main.App.settle(app, img, [dict(b)])[0] for b in seq]
+
+    def test_leituras_que_alternam_nao_trocam_o_texto(self):
+        a, b = self._b("1 of 26 free", "1 de 26 livres"), self._b("I of 26 free", "I de 26 livres")
+        self.assertEqual({r["pt"] for r in self._run([a, b, a, b, a, b])}, {"1 de 26 livres"})
+
+    def test_leitura_mais_completa_ganha_e_fica(self):
+        part, full = self._b("in stock", "em estoque", x=110, w=60), self._b("1 in stock", "1 em estoque", x=100, w=70)
+        got = [r["pt"] for r in self._run([part, full, part, full, part])]
+        self.assertEqual(got, ["em estoque"] + ["1 em estoque"] * 4)
+
+    def test_alinhamento_e_posicao_nao_mudam(self):
+        seq = [self._b("TALENTS", "TALENTOS", x=750 + (i % 2), w=53 - (i % 2), align="lr"[i % 2]) for i in range(6)]
+        got = self._run(seq)
+        self.assertEqual(len({(r["x"], r["w"], r["align"]) for r in got}), 1)
 
     def test_caixa_com_icone_perde_para_a_sem_icone(self):
-        app, main = self._app()
-        wide = {"en": "O Agility (Scaling)", "pt": "Agilidade (Scaling)", "x": 226, "y": 880, "w": 117, "h": 12, "align": "left"}
-        narrow = {"en": "Agility (Scaling)", "pt": "Agilidade (Scaling)", "x": 249, "y": 880, "w": 94, "h": 12, "align": "left"}
-        got = [main.App.stable_geometry(app, [dict(b)])[0]["x"] for b in (wide, narrow, wide, narrow, wide, narrow)]
-        self.assertEqual(got[1:], [249] * 5)  # depois da 2a leitura, fica sempre a sem icone
+        wide = self._b("O Agility (Scaling)", "Agilidade (Scaling)", x=226, w=117)
+        narrow = self._b("Agility (Scaling)", "Agilidade (Scaling)", x=249, w=94)
+        got = [r["x"] for r in self._run([wide, narrow, wide, narrow, wide])]
+        self.assertEqual(got, [226, 249, 249, 249, 249])
+
+    def test_primeira_leitura_errada_e_corrigida_depois_de_3(self):
+        bad, good = self._b("Seli", "Seli (x)"), self._b("Sell", "Vender")
+        got = [r["pt"] for r in self._run([bad, good, good, good, good])]
+        self.assertEqual(got[-1], "Vender")
+        self.assertEqual(got[1], "Seli (x)")  # uma discordancia so nao troca
+
+    def test_mesmo_lugar_guarda_fonte_e_cor(self):
+        r = self._run([self._b("Sell", "Vender"), self._b("Sell", "Vender", x=101)])
+        self.assertEqual(r[0]["_slot"], r[1]["_slot"])
 
 
 if __name__ == "__main__":

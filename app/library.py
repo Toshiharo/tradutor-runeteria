@@ -33,7 +33,7 @@ def is_upper(text):
     return len(letters) >= 2 and sum(c.isupper() for c in letters) / len(letters) > 0.85
 
 
-MEMORY_VERSION = 3  # memoria automatica gravada antes disto traduzia nomes e cards inteiros: e descartada
+MEMORY_VERSION = 4  # memoria automatica gravada antes disto traduzia nomes e cards inteiros: e descartada
 
 
 def _tok(t):
@@ -70,6 +70,9 @@ def adapt(screen, en, pt, strict):
         if op == "equal":
             continue
         changed += max(i2 - i1, j2 - j1)
+        if any(re.search(r"\d", t) for t in a[j1:j2]) != any(re.search(r"\d", t) for t in b[i1:i2]) or \
+                (op != "replace" and any(re.search(r"\d", t) for t in a[j1:j2] + b[i1:i2])):
+            return None  # um numero a mais ou a menos nao e "parecido": a caixa cobriria o valor do jogo
         if strict and op == "replace" and i2 - i1 == j2 - j1 and all(
                 fuzz.ratio(x, y) >= 80 for x, y in zip(nb[i1:i2], na[j1:j2])):
             continue  # erro de leitura do OCR (so em texto quase identico: "Requires" nao e "REQUEST")
@@ -143,7 +146,9 @@ class Library:
         online = read_json(ONLINE_GLOSSARY, {}) if newer(ONLINE_GLOSSARY, SEED_GLOSSARY) else {}
         if isinstance(online, dict) and isinstance(online.get("manter_em_ingles"), list):
             seed = {"manter_em_ingles": list(seed.get("manter_em_ingles", [])) + online["manter_em_ingles"],
-                    "termos_fixos": {**(seed.get("termos_fixos") or {}), **(online.get("termos_fixos") or {})}}
+                    "termos_fixos": {**(seed.get("termos_fixos") or {}), **(online.get("termos_fixos") or {})},
+                    "verbos_de_objetivo": {**(seed.get("verbos_de_objetivo") or {}),
+                                           **(online.get("verbos_de_objetivo") or {})}}
         g = seed.get("manter_em_ingles", [])
         user = read_json(USER_GLOSSARY, None)
         if user is None:
@@ -159,6 +164,12 @@ class Library:
                 if isinstance(pt, str) and en.strip() and pt.strip():
                     terms[en.strip().lower()] = pt.strip()
         self.terms = terms
+        # verbos de objetivo de missao ("Mine 15 Rock Blocks"); os do usuario vencem os do programa
+        self.verbs = {}
+        for src in (seed, user):
+            for en, pt in (src.get("verbos_de_objetivo") or {}).items():
+                if isinstance(pt, str) and en.strip() and pt.strip():
+                    self.verbs[en.strip().lower()] = pt.strip()
         g = list(g) + list(user.get("manter_em_ingles", []))
         return sorted({t for t in g if t.strip()}, key=len, reverse=True)
 
@@ -188,6 +199,11 @@ class Library:
     # ---------- consulta ----------
     def knows(self, en):
         return normalize(en) in self.index
+
+    def knows_reviewed(self, en):
+        """Tem traducao revisada (biblioteca ou correcao do usuario), nao so a automatica?"""
+        hit = self.index.get(normalize(en))
+        return hit is not None and hit[2] != "auto"
 
     def _candidates(self, key):
         """[(entrada, score)] parecidas com a chave, da mais parecida para a menos (guardado: a mesma
@@ -234,6 +250,9 @@ class Library:
             pt = pt[0] + pt[1:].lower()
         if pt.endswith(":") and not text.rstrip().endswith(":"):
             pt = pt[:-1]
+        first = next((c for c in text if c.isalpha()), "")
+        if first.isupper() and pt[:1].islower():
+            pt = pt[:1].upper() + pt[1:]
         return pt, origin, score
 
     # ---------- memoria automatica ----------
