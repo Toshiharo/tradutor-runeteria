@@ -25,6 +25,7 @@ DisableReadyPage=yes
 DisableWelcomePage=yes
 WizardStyle=modern
 SetupIconFile=app\icone.ico
+WizardSmallImageFile=tools\instalador_logo.bmp
 UninstallDisplayIcon={app}\{#AppExe}
 UninstallDisplayName={#AppName}
 OutputDir=dist

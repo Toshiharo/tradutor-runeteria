@@ -9,7 +9,7 @@ import time
 from rapidfuzz import fuzz, process
 
 from config import (MEMORY_FILE, ONLINE_GLOSSARY, ONLINE_LIBRARY, SEED_GLOSSARY, SEED_LIBRARY,
-                    USER_GLOSSARY, USER_OVERRIDES, read_json, write_json)
+                    USER_GLOSSARY, USER_OVERRIDES, newer, read_json, write_json)
 
 NUM_RE = re.compile(r"\d+(?:[.,]\d+)*%?")
 SPACE_RE = re.compile(r"\s+")
@@ -61,7 +61,9 @@ class Library:
     def _load_seed():
         """Biblioteca revisada: a que veio com o programa + a copia mais nova baixada do repositorio."""
         seed = read_json(SEED_LIBRARY, {})
-        online = read_json(ONLINE_LIBRARY, {})
+        # a copia baixada so vale se for mais nova que a do programa (senao uma atualizacao do
+        # programa, ou uma edicao local, seria desfeita por um download antigo)
+        online = read_json(ONLINE_LIBRARY, {}) if newer(ONLINE_LIBRARY, SEED_LIBRARY) else {}
         if isinstance(online, dict):
             seed.update({k: v for k, v in online.items() if isinstance(v, dict) and isinstance(v.get("pt"), str)})
         return seed
@@ -75,7 +77,7 @@ class Library:
 
     def _load_glossary(self):
         seed = read_json(SEED_GLOSSARY, {})
-        online = read_json(ONLINE_GLOSSARY, {})
+        online = read_json(ONLINE_GLOSSARY, {}) if newer(ONLINE_GLOSSARY, SEED_GLOSSARY) else {}
         if isinstance(online, dict) and isinstance(online.get("manter_em_ingles"), list):
             seed = {"manter_em_ingles": list(seed.get("manter_em_ingles", [])) + online["manter_em_ingles"],
                     "termos_fixos": {**(seed.get("termos_fixos") or {}), **(online.get("termos_fixos") or {})}}

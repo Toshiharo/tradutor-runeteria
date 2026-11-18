@@ -15,8 +15,11 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
 - Roda no Windows (2026-11-18): Python 3.12.10 em `.venv`, winrt 4.x, ctranslate2 4.9, mss 10, PyInstaller 6.22.
   OCR en-US instalado; modelo em `modelos/en_pt`; `dist\TradutorRuneteria\` gerado e abre sem erro.
 - Verificado de verdade: OCR, tradução offline, biblioteca/fuzzy, lock no log real, atualizador no cache real, captura da janela.
-- **Ainda não conferido a olho:** o overlay desenhado por cima do jogo em foco (posição, clique atravessando,
-  `SetWindowDisplayAffinity`). O jogo precisa estar em janela / janela sem bordas (tela cheia exclusiva esconde o overlay).
+- Overlay conferido em 2026-11-18 sobre uma captura real do jogo (tela Overview, 1920x1009): em 77 textos, mediana de
+  altura x1,00, largura x1,00 e desvio vertical 0 px contra o original. O app também rodou ao vivo com o jogo em foco
+  sem erro. O overlay não aparece em capturas (`SetWindowDisplayAffinity`), então a conferência visual é feita
+  desenhando com `App.draw` sobre a captura; o clique atravessando o overlay só o usuário consegue confirmar.
+  O jogo precisa estar em janela / janela sem bordas (tela cheia exclusiva esconde o overlay).
 - A tradução automática (Argos) é fraca em rótulos curtos e puxa para pt-PT; o que importa deve ir para `biblioteca.json`.
 
 ## Arquitetura (`app/`)
@@ -30,12 +33,18 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
 - `pipeline.py` — agrupa linhas em parágrafos; biblioteca primeiro; desconhecidos vão para fila de tradução offline,
   mas só se passarem no filtro `looks_translatable` (descarta lixo de OCR do cenário) e ficarem ~1,5 s parados na tela.
   O que o modelo não traduz entra num cache negativo (`failed`) e não é tentado de novo na sessão.
-- `style.py` — aparência do overlay (só PIL): `add_colors` tira da captura a cor de fundo/letra de cada linha e o
-  espaço de fundo liso dos lados (`room_l`/`room_r`); `font_px` corrige o tamanho (caixa do OCR sem descendentes
-  mede ~0,74 da fonte); `guess_align`/`block_align` decidem esquerda/centro. `main.draw` usa isso, detecta negrito
-  comparando larguras e não redesenha se nada mudou. Tradução automática aparece em itálico.
-  `usar_cores_da_tela: false` no config volta às cores fixas.
-- `library.py` — prioridade: `minhas_traducoes.json` (usuário) > `data/biblioteca.json` (2.759 revisadas)
+- `style.py` — aparência do overlay (só PIL), tudo medido na captura: `add_colors` anota em cada linha a cor de
+  fundo/letra, o fundo liso dos lados (`room_l`/`room_r`), topo/altura/quantidade de tinta das letras (`iy`/`ih`/`ink`),
+  fundo em degradê (`grad`) e se a palavra foi cortada pelo OCR (`cut`, aí não traduz). `pick_face` escolhe a fonte do
+  jogo com os arquivos de `app/fonts`: família pela largura (MAIÚSCULAS→Lexend, texto→Inter, título grande→Cormorant),
+  peso pela tinta, tamanho pela altura das letras, e devolve o espaçamento entre letras (`track`) e a linha de base.
+  `guess_align` decide esquerda/centro/direita pelas vizinhas e pelo fundo dos lados.
+  `main.draw` alinha pela linha de base, desenha letra a letra quando há espaçamento (`draw_tracked`), nunca quebra
+  no meio de palavra e não redesenha se nada mudou. Tradução automática aparece em itálico.
+  `usar_cores_da_tela: false` volta às cores fixas; `fonte_overlay` troca "auto" por uma fonte fixa.
+- `pipeline.tidy_lines` (antes de traduzir) separa colunas que o OCR juntou e tira ícones lidos como letra
+  ("O MANA"); `join_known` junta pedaços de rótulos espaçados quando o conjunto existe na biblioteca ("RUNE BACKPACK").
+- `library.py` — prioridade: `minhas_traducoes.json` (usuário) > `data/biblioteca.json` (~2.770 revisadas; a cópia baixada do GitHub só vale no programa instalado e se for mais nova)
   > `memoria_automatica.json`. Normaliza caixa/pontuação, números viram `#` e são reinseridos; rapidfuzz ratio ≥ 86.
 - `mt.py` — modelo Argos en→pt rodando direto em ctranslate2 + sentencepiece (sem argostranslate/torch).
   Termos do glossário protegidos com marcadores `ZqNx`; se o modelo perder um, traduz os pedaços entre os termos.
@@ -65,7 +74,8 @@ para o fluxo normal. Cada problema aparece na janela em linguagem simples, com u
 `theme.py` tem os tokens do "Runeteria Design System" (artifact do dono no claude.ai, UI KIT V2): rampa navy base-bg,
 dourado primary como único destaque, cantos de 4–6 px, filete dourado com losango, rótulos de botão/seção em MAIÚSCULAS.
 Fontes em `app/fonts` (OFL, carregadas só para o processo): Cormorant (título), Lexend (botões/rótulos), Inter (texto).
-Sem emoji, sem logotipo desenhado (o ícone é um "R" tipográfico, `tools/gerar_icone.py`). Não usar cores fora dos tokens.
+Sem emoji. Marca: logos oficiais do Runeteria em `app/assets` (logo completo no cabeçalho, "R" dourado no ícone);
+`tools/gerar_icone.py <pasta dos logos>` regenera `icone.ico` e as imagens. Não usar cores fora dos tokens.
 `main._build_window` monta a janela; `refresh_status` decide a frase de estado e as linhas de "Preparação".
 
 ## Internet (opcional, desligável)

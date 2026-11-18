@@ -17,8 +17,8 @@ import theme as T
 from config import APP_NAME, ERROR_LOG, HYTALE_LOGS, MODEL_DIR, SCREEN_DUMP, USER_DIR
 from library import Library
 from lock import RuneteriaLock
-from pipeline import Translator
-from style import DESCENDERS, add_colors, avail_width, font_px
+from pipeline import Translator, tidy_lines
+from style import DESCENDERS, _rgb, add_colors, avail_width, font_px, init_faces, pick_face
 
 KEY_COLOR = "#ff00fe"  # cor "invisivel" do overlay
 
@@ -85,6 +85,8 @@ class App:
         self.ctrl_hwnd = winutil.toplevel_hwnd(self.root.winfo_id())
         winutil.dark_titlebar(self.ctrl_hwnd)
         self.fonts = {}
+        init_faces(config.FONTS_DIR)  # para medir e reproduzir a fonte do jogo no overlay
+        self.fallback_font = "Segoe UI" if self.cfg["fonte_overlay"] == "auto" else self.cfg["fonte_overlay"]
 
         hk = winutil.Hotkeys({
             self.cfg["atalho_liga_desliga"]: lambda: self.ui_q.put(("toggle",)),
@@ -99,7 +101,7 @@ class App:
         self.refresh_status()
         threading.Thread(target=self.load_models, daemon=True).start()
         threading.Thread(target=self.worker, daemon=True).start()
-        if self.cfg["atualizar_pela_internet"]:
+        if self.cfg["atualizar_pela_internet"] and config.FROZEN:  # pelo codigo-fonte vale o arquivo local
             threading.Thread(target=self.online_check, daemon=True).start()
         self.root.after(50, self.pump)
 
@@ -110,14 +112,23 @@ class App:
         panel = tk.Frame(root, bg=T.PANEL, width=W)
         panel.pack(fill="both", expand=True, padx=1, pady=1)
 
-        # cabecalho: titulo in-game (Cormorant dourado) + filete com losango
-        head = tk.Frame(panel, bg=T.PANEL)
-        head.pack(fill="x", padx=16, pady=(14, 0))
-        tk.Label(head, text=APP_NAME, font=T.font("title"), fg=T.GOLD_HI, bg=T.PANEL).pack(side="left")
-        tk.Label(head, text=f"v{config.APP_VERSION}", font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL).pack(
-            side="right", anchor="s", pady=(0, 6))
-        tk.Label(panel, text="As telas do Runeteria em português do Brasil", font=T.font("caption"),
-                 fg=T.MUTED, bg=T.PANEL, anchor="w").pack(fill="x", padx=16)
+        # cabecalho: logo oficial do Runeteria + "TRADUTOR" + filete com losango
+        try:
+            from PIL import Image, ImageTk
+            logo = Image.open(config.LOGO_FILE).convert("RGBA")
+            logo.thumbnail((250, 96), Image.LANCZOS)
+            self._logo = ImageTk.PhotoImage(logo)  # guarda a referencia, senao o tkinter descarta a imagem
+            tk.Label(panel, image=self._logo, bg=T.PANEL, bd=0).pack(pady=(14, 0))
+            title = "TRADUTOR"
+        except Exception:
+            title = None  # sem o arquivo do logo: o nome vai escrito no titulo
+            tk.Label(panel, text=APP_NAME, font=T.font("title"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(14, 0))
+        if title:
+            tk.Label(panel, text=title, font=T.font("button"), fg=T.GOLD_HI, bg=T.PANEL).pack(pady=(2, 0))
+        tk.Label(panel, text="As telas do jogo em português do Brasil", font=T.font("caption"),
+                 fg=T.MUTED, bg=T.PANEL).pack()
+        tk.Label(panel, text=f"v{config.APP_VERSION}", font=T.font("caption"), fg=T.DISABLED, bg=T.PANEL).place(
+            relx=1.0, x=-14, y=10, anchor="ne")
         T.gold_divider(panel).pack(fill="x", padx=16, pady=(10, 12))
 
         # estado: o que o tradutor esta fazendo agora, em uma frase
@@ -396,7 +407,7 @@ class App:
                 if sig == last_sig:
                     boxes = self.translator.boxes(self.last_lines)  # pega traducoes que acabaram de ficar prontas
                 else:
-                    lines = self.ocr.recognize(img, self.cfg["escala_ocr"])
+                    lines = tidy_lines(self.ocr.recognize(img, self.cfg["escala_ocr"]))
                     if self.cfg["usar_cores_da_tela"]:
                         add_colors(img, lines)
                     self.last_lines = lines
@@ -447,23 +458,38 @@ class App:
             self.ov.withdraw()
             self.ov_shown = False
 
-    def font(self, px, italic=False, bold=True):
-        key = (px, italic, bold)
+    def font(self, px, italic=False, bold=True, family=None, weight=None):
+        """Fonte do overlay. family/weight vem de style.pick_face; sem eles usa a fonte de reserva."""
+        key = (px, italic, bold, family, weight)
         f = self.fonts.get(key)
         if f is None:
-            f = self.fonts[key] = tkfont.Font(family=self.cfg["fonte"], size=-px,
-                                              weight="bold" if bold else "normal",
+            f = self.fonts[key] = tkfont.Font(family=family or self.fallback_font, size=-px,
+                                              weight=weight or ("bold" if bold else "normal"),
                                               slant="italic" if italic else "roman")
         return f
 
     def looks_bold(self, b, px):
-        """O texto original era negrito? Compara a largura lida na tela com a da nossa fonte nos dois pesos."""
+        """(reserva, sem os arquivos de fonte) O original era negrito? Compara larguras nos dois pesos."""
         text, width = b.get("ref", (b["en"], b["w"]))
         if text.isupper():
             return True  # rotulos em MAIUSCULAS sao quase sempre negrito, e em texto curto a medida engana
         wb = self.font(px, False, True).measure(text)
         wn = self.font(px, False, False).measure(text)
         return abs(wb - width) <= abs(wn - width)
+
+    def draw_tracked(self, c, ax, y, text, fnt, fill, track, align):
+        """Desenha o texto letra por letra com `track` pixels a mais entre elas (o tkinter nao tem
+        espacamento entre letras). Devolve (tag dos itens, caixa)."""
+        total = fnt.measure(text) + track * (len(text) - 1)
+        x = {"center": ax - total / 2, "right": ax - total}.get(align, ax)
+        self._tag_n = getattr(self, "_tag_n", 0) + 1
+        tag = f"t{self._tag_n}"
+        x0 = x
+        for i, ch in enumerate(text):
+            if ch != " ":
+                c.create_text(round(x0 + fnt.measure(text[:i]) + track * i), y, text=ch, anchor="nw",
+                              font=fnt, fill=fill, tags=tag)
+        return tag, (x, y, x + total, y + fnt.metrics("linespace"))
 
     def draw(self, rect, boxes):
         self.last_boxes = boxes
@@ -479,6 +505,7 @@ class App:
         c.delete("all")
         min_px = self.cfg["tamanho_fonte_min"]
         screen_colors = self.cfg["usar_cores_da_tela"]
+        auto_font = self.cfg["fonte_overlay"] == "auto"
         for b in boxes:
             auto = b["origin"] == "auto"
             if screen_colors and "bg" in b:
@@ -489,46 +516,95 @@ class App:
             else:
                 bg, italic = self.cfg["opacidade_fundo"], False
                 fg = self.cfg["cor_texto_auto"] if auto else self.cfg["cor_texto"]
-            center = b.get("align") == "center"
+            align = b.get("align", "left")
             single = b.get("lines", 1) == 1
-            px = max(min_px, font_px(b["ref"][0] if "ref" in b else b["en"], b["line_h"]))
-            bold = self.looks_bold(b, px)
+            ref_text, ref_w = b.get("ref", (b["en"], b["w"]))
+            ink_y, ink_h = b.get("iy", b["y"]), b.get("ih", b["line_h"])
+            # mesma fonte, peso e tamanho do original (medidos com os arquivos de fonte do jogo)
+            face = pick_face(ref_text, ref_w, ink_h, b.get("ink")) if auto_font else None
+            if face:
+                px = max(min_px, face["px"])
+                fkw = {"family": face["family"], "weight": face["weight"]}
+            else:
+                px = max(min_px, font_px(ref_text, b["line_h"]))
+                fkw = {"bold": self.looks_bold(b, px)}
+            px0 = px
             avail = avail_width(b)  # o texto pode ocupar o fundo liso que existe ao lado do original
+            track = face["track"] if face and single else 0
+            n_gaps = max(len(b["pt"]) - 1, 0)
+
+            def width_of(size, tr):
+                return self.font(size, italic, **fkw).measure(b["pt"]) + tr * n_gaps
+
+            wrap = 0
             if single:
-                # uma linha continua uma linha: usa o espaco livre, depois diminui a letra ate 80%;
-                # so quebra em duas se ainda assim nao couber
-                floor = max(min_px, int(px * 0.8))
-                while px > floor and self.font(px, italic, bold).measure(b["pt"]) > avail:
+                # uma linha continua uma linha: usa o espaco livre; se nao couber, primeiro tira o
+                # espacamento entre letras, depois diminui a letra ate 70%. So quebra em duas se ainda
+                # assim nao couber E houver espaco para quebrar (nunca no meio de uma palavra).
+                if width_of(px, track) > avail:
+                    track = max(0, min(track, (avail - width_of(px, 0)) / n_gaps)) if n_gaps else 0
+                floor = max(min_px, int(px * 0.7))
+                while px > floor and width_of(px, track) > avail:
                     px -= 1
-                wrap = avail if self.font(px, italic, bold).measure(b["pt"]) > avail else 0
+                if width_of(px, track) > avail and " " in b["pt"]:
+                    wrap, track = avail, 0
             else:
                 wrap = avail
-            ax = b["x"] + b["w"] / 2 if center else b["x"]
+            ax, anchor = {"center": (b["x"] + b["w"] / 2, "n"), "right": (b["x"] + b["w"], "ne")}.get(
+                align, (b["x"], "nw"))
             while True:
-                item = c.create_text(ax, b["y"], text=b["pt"], anchor="n" if center else "nw",
-                                     justify="center" if center else "left", width=wrap,
-                                     font=self.font(px, italic, bold), fill=fg)
+                fnt = self.font(px, italic, **fkw)
+                if track >= 0.5 and not wrap:
+                    item, bx = self.draw_tracked(c, ax, b["y"], b["pt"], fnt, fg, track, align)
+                    break
+                item = c.create_text(ax, b["y"], text=b["pt"], anchor=anchor, justify=align, width=wrap,
+                                     font=fnt, fill=fg)
                 bx = c.bbox(item)
                 if single or bx[3] - bx[1] <= b["h"] * 1.2 + 2 or px <= min_px:
                     break
                 c.delete(item)
                 px -= 1
-            # centraliza na altura do texto original (a caixa do tk inclui espaco acima/abaixo das letras)
-            dy = (b["y"] + b["h"] / 2) - (bx[1] + bx[3]) / 2
-            if bx[3] - bx[1] < px * 2:  # ficou em uma linha
-                dy -= px * (0.15 if any(ch in DESCENDERS for ch in b["pt"]) else 0.06)
+            one_line = bx[3] - bx[1] < fnt.metrics("linespace") * 1.5
+            if face and single and one_line:
+                # mesma linha de base do original: as letras assentam onde as originais assentavam,
+                # mesmo que a traducao tenha acento ou letra que desce e o original nao
+                baseline = ink_y + ink_h - face["below"]
+                dy = baseline - fnt.metrics("ascent") - bx[1]
+                top, bottom = baseline - px * 0.98, baseline + px * 0.27
+            else:
+                # centraliza na altura do texto original (a caixa do tk inclui espaco acima/abaixo das letras)
+                dy = (b["y"] + b["h"] / 2) - (bx[1] + bx[3]) / 2
+                if one_line:
+                    dy -= px0 * (0.15 if any(ch in DESCENDERS for ch in b["pt"]) else 0.06)
+                top, bottom = bx[1] + dy, bx[3] + dy
             dx = 0
             if bx[0] < 2:
                 dx = 2 - bx[0]
             elif bx[2] > w - 2:
                 dx = w - 2 - bx[2]
             c.move(item, dx, dy)
-            bx = c.bbox(item)
+            bx = (bx[0] + dx, bx[1] + dy, bx[2] + dx, bx[3] + dy)
             pad = 2
-            r = c.create_rectangle(min(bx[0], b["x"]) - pad, min(bx[1], b["y"]) - pad,
-                                   max(bx[2], b["x"] + b["w"]) + pad, max(bx[3], b["y"] + b["h"]) + pad,
-                                   fill=bg, outline="")
+            rx0, ry0 = min(bx[0], b["x"]) - pad, min(top, b["y"]) - pad
+            rx1, ry1 = max(bx[2], b["x"] + b["w"]) + pad, max(bottom, b["y"] + b["h"]) + pad
+            r = c.create_rectangle(rx0, ry0, rx1, ry1, fill=bg, outline="")
             c.tag_lower(r, item)
+            if screen_colors and "grad" in b:
+                # fundo que nao e liso (degrade, painel translucido): repinta linha a linha com as cores
+                # lidas a esquerda e a direita do texto, interpolando entre elas
+                gy, rows = b["grad"]
+                seg = (rx1 - rx0) / 6
+                for yy in range(int(ry0), int(ry1) + 1):
+                    lc, rc = rows[min(max(yy - gy, 0), len(rows) - 1)]
+                    if lc == rc:
+                        c.tag_lower(c.create_line(rx0, yy, rx1, yy, fill=lc), item)
+                        continue
+                    l3, r3 = _rgb(lc), _rgb(rc)
+                    for k in range(6):
+                        t = (k + 0.5) / 6
+                        col = "#%02x%02x%02x" % tuple(int(l3[i] + (r3[i] - l3[i]) * t) for i in range(3))
+                        c.tag_lower(c.create_line(rx0 + seg * k, yy, rx0 + seg * (k + 1), yy, fill=col), item)
+                c.tag_lower(r)
         if not self.ov_shown:
             self.ov.deiconify()
             self.ov.attributes("-topmost", True)

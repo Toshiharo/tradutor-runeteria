@@ -19,6 +19,96 @@ MAX_FAILED = 4000
 MAX_LEN = 400
 
 
+def _from_words(words):
+    x = min(w["x"] for w in words)
+    y = min(w["y"] for w in words)
+    return {"text": " ".join(w["text"] for w in words), "x": x, "y": y,
+            "w": max(w["x"] + w["w"] for w in words) - x, "h": max(w["y"] + w["h"] for w in words) - y}
+
+
+def tidy_lines(lines):
+    """Arruma as linhas do OCR antes de traduzir, usando a posicao de cada palavra.
+
+    - O OCR junta numa "linha" coisas que estao lado a lado mas sao elementos diferentes
+      (dois botoes, rotulo + valor na outra ponta): um vao maior que 3,2x a altura separa
+      (menos que isso pode ser so um rotulo com letras bem espacadas, como "RUNE  BACKPACK").
+    - Icones ao lado do texto sao lidos como letra ou simbolo ("O MANA", "V AGILITY", "@ SERVERS").
+      Um pedaco de 1 caractere na ponta, que seja simbolo ou esteja afastado do texto, e descartado:
+      senao a traducao cobriria o icone e ficaria do tamanho dele.
+    """
+    out = []
+    for ln in lines:
+        words = ln.get("words")
+        if not words or len(words) == 1:
+            out.append(ln)
+            continue
+        hs = sorted(w["h"] for w in words)
+        hmed = hs[(len(hs) - 1) // 2]  # mediana "para baixo": um icone alto nao puxa a referencia
+        segs, cur = [], [words[0]]
+        for prev, w in zip(words, words[1:]):
+            if w["x"] - (prev["x"] + prev["w"]) > hmed * 3.2:
+                segs.append(cur)
+                cur = []
+            cur.append(w)
+        segs.append(cur)
+        for seg in segs:
+            for end in (0, -1):  # ponta esquerda, depois a direita
+                while len(seg) > 1 and len(seg[end]["text"]) == 1 and not seg[end]["text"].isdigit():
+                    edge, nxt = seg[end], seg[1 if end == 0 else -2]
+                    gap = (nxt["x"] - (edge["x"] + edge["w"])) if end == 0 else (edge["x"] - (nxt["x"] + nxt["w"]))
+                    # + - & etc. podem ser texto de verdade ("+ UPGRADE"): esses so saem se estiverem afastados
+                    symbol = not edge["text"].isalnum() and edge["text"] not in "+-&/%#$()[]<>=:;.,!?\"'"
+                    taller = edge["h"] > nxt["h"] * 1.3 and gap > hmed * 0.5  # icone e maior que a letra
+                    if not (symbol or gap > hmed * 0.9 or taller):
+                        break
+                    seg.pop(end)
+            if len(seg) == 1 and len(seg[0]["text"]) == 1 and not seg[0]["text"].isalnum():
+                continue  # sobrou so um simbolo solto
+            out.append(_from_words(seg))
+    return out
+
+
+def _near(c1, c2, limit=48):
+    """Duas cores '#rrggbb' sao praticamente a mesma? (a cor lida de cada pedaco varia um pouco)"""
+    if not c1 or not c2:
+        return c1 == c2
+    return sum(abs(int(c1[i:i + 2], 16) - int(c2[i:i + 2], 16)) for i in (1, 3, 5)) <= limit
+
+
+def join_known(lines, knows):
+    """Junta pedacos vizinhos na mesma linha quando o texto junto e conhecido da biblioteca.
+
+    Rotulos com letras bem espacadas ("RUNE   BACKPACK") chegam do OCR em pedacos; traduzidos um a um
+    viram "RUNA MOCHILA". Se o conjunto existe na biblioteca, vale o conjunto.
+    """
+    lines = sorted(lines, key=lambda l: (round(l["y"] / 4), l["x"]))
+    out, i = [], 0
+    while i < len(lines):
+        a = lines[i]
+        j = i + 1
+        while j < len(lines):
+            b = lines[j]
+            gap = b["x"] - (a["x"] + a["w"])
+            same_row = abs(b["y"] - a["y"]) < a["h"] * 0.35 and 0.75 < b["h"] / max(a["h"], 1) < 1.33
+            if not (same_row and 0 < gap < a["h"] * 6 and _near(a.get("fg"), b.get("fg"))
+                    and knows(a["text"] + " " + b["text"])):
+                break
+            m = dict(a)
+            m["text"] = a["text"] + " " + b["text"]
+            m["w"] = b["x"] + b["w"] - a["x"]
+            m["h"] = max(a["y"] + a["h"], b["y"] + b["h"]) - min(a["y"], b["y"])
+            m["y"] = min(a["y"], b["y"])
+            if "room_r" in b:
+                m["room_r"] = b["room_r"]
+            m["cut"] = bool(b.get("cut"))  # o "colado" entre os dois pedacos era o proprio vizinho
+            m.pop("grad", None)
+            a = m
+            j += 1
+        out.append(a)
+        i = j
+    return out
+
+
 def group_blocks(lines):
     """Junta linhas de um mesmo paragrafo (descricoes quebradas em varias linhas)."""
     lines = sorted(lines, key=lambda l: (round(l["y"]), l["x"]))
@@ -177,13 +267,14 @@ class Translator:
     def boxes(self, lines):
         """Devolve [{'x','y','w','h','line_h','pt','origin','en'}]."""
         self._prune()
+        lines = join_known(lines, self.lib.knows)
         out = []
 
         def box(geo, first, pt, origin, en, align, n_lines):
             d = {**{k: geo[k] for k in "xywh"}, "line_h": first["h"], "pt": pt, "origin": origin,
                  "en": en, "align": align, "lines": n_lines,
                  "ref": (first["text"], first["w"])}  # 1a linha original: serve para medir peso/tamanho da fonte
-            for k in ("bg", "fg"):  # cores tiradas da captura (style.add_colors), se houver
+            for k in ("bg", "fg", "iy", "ih", "ink", "grad"):  # cores e altura exata das letras (style.add_colors), se houver
                 if k in first:
                     d[k] = first[k]
             if "room_r" in first:  # espaco livre dos lados (o menor entre as linhas do paragrafo)
@@ -201,6 +292,8 @@ class Translator:
                 continue
             hits = 0
             for ln in b["lines"]:
+                if ln.get("cut"):
+                    continue  # o OCR pegou so um pedaco da palavra: melhor nao traduzir
                 r = self._one(ln["text"], allow_mt=not multi)
                 if r:
                     hits += 1

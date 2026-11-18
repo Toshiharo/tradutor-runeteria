@@ -8,7 +8,8 @@ import os
 import urllib.error
 import urllib.request
 
-from config import (APP_VERSION, ONLINE_DIR, ONLINE_GLOSSARY, ONLINE_LIBRARY, REPO, read_json, write_json)
+from config import (APP_VERSION, ONLINE_DIR, ONLINE_GLOSSARY, ONLINE_LIBRARY, REPO, SEED_GLOSSARY,
+                    SEED_LIBRARY, newer, read_json, write_json)
 
 RAW = f"https://raw.githubusercontent.com/{REPO}/main/app/data/"
 LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"
@@ -48,10 +49,11 @@ def sync_translations():
     os.makedirs(ONLINE_DIR, exist_ok=True)
     etags = read_json(ETAGS, {})
     changed = False
-    for name, dest, valid in (("biblioteca.json", ONLINE_LIBRARY, _valid_library),
-                              ("glossario.json", ONLINE_GLOSSARY, _valid_glossary)):
+    for name, dest, bundled, valid in (("biblioteca.json", ONLINE_LIBRARY, SEED_LIBRARY, _valid_library),
+                                       ("glossario.json", ONLINE_GLOSSARY, SEED_GLOSSARY, _valid_glossary)):
         try:
-            raw, etag = _get(RAW + name, etags.get(name) if os.path.exists(dest) else None)
+            # copia mais velha que a do programa nao esta em uso: baixa de novo mesmo sem mudanca
+            raw, etag = _get(RAW + name, etags.get(name) if newer(dest, bundled) else None)
             if raw is None or len(raw) > MAX_BYTES:
                 continue
             data = json.loads(raw.decode("utf-8"))

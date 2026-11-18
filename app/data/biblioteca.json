@@ -12765,7 +12765,7 @@
 "reviewed": true
 },
 "SETTINGS": {
-"pt": "CONFIGURAÇÕES",
+"pt": "AJUSTES",
 "source": "manual",
 "reviewed": true
 },
@@ -13836,6 +13836,11 @@
 },
 "Increases your chance of catching fish and favors better fish with quicker bites. Treasure is still possible. One is used each bite. Right-click while holding this bait with a rod in your hotbar to open its tackle menu and apply it.": {
 "pt": "Aumenta sua chance de pegar peixes e favorece peixes melhores, com mordidas mais rápidas. Ainda é possível vir tesouro. Uma é usada a cada mordida. Clique com o botão direito segurando esta isca, com uma vara na sua Hotbar, para abrir o menu de apetrechos e aplicá-la.",
+"source": "manual",
+"reviewed": true
+},
+"RUNE BACKPACK": {
+"pt": "RUNE BACKPACK",
 "source": "manual",
 "reviewed": true
 }

@@ -30,14 +30,13 @@ if errorlevel 1 (
 echo === 3/5 Baixando o modelo de traducao offline (uma vez so, ~100 MB) ===
 python baixar_modelo.py
 if not exist app\fonts\Lexend.ttf python tools\baixar_fontes.py
-if not exist app\icone.ico python tools\gerar_icone.py
 
 echo === 4/5 Gerando o programa ===
 set ADDMODEL=
 if exist modelos\en_pt set ADDMODEL=--add-data "modelos;modelos"
 pyinstaller --noconfirm --clean --onedir --windowed --name TradutorRuneteria ^
   --icon app\icone.ico ^
-  --paths app --add-data "app\data;data" --add-data "app\fonts;fonts" --add-data "app\icone.ico;." %ADDMODEL% ^
+  --paths app --add-data "app\data;data" --add-data "app\fonts;fonts" --add-data "app\assets;assets" --add-data "app\icone.ico;." %ADDMODEL% ^
   --collect-all winrt --collect-all ctranslate2 --collect-all sentencepiece ^
   --hidden-import rapidfuzz --collect-submodules rapidfuzz ^
   app\main.py

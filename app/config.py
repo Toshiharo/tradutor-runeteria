@@ -13,9 +13,11 @@ if getattr(sys, "frozen", False):
 else:
     BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+FROZEN = bool(getattr(sys, "frozen", False))
 DATA_DIR = os.path.join(BUNDLE_DIR, "data")
 FONTS_DIR = os.path.join(BUNDLE_DIR, "fonts")
 ICON_FILE = os.path.join(BUNDLE_DIR, "icone.ico")
+LOGO_FILE = os.path.join(BUNDLE_DIR, "assets", "logo_runeteria.png")  # logo oficial do Runeteria
 MODEL_DIR = os.path.join(BUNDLE_DIR, "modelos", "en_pt")
 if not os.path.isdir(MODEL_DIR):  # rodando direto do codigo-fonte
     MODEL_DIR = os.path.join(os.path.dirname(BUNDLE_DIR), "modelos", "en_pt")
@@ -52,7 +54,7 @@ DEFAULTS = {
     "traduzir_desconhecidos": True,
     "atualizar_pela_internet": True,   # baixa traducoes novas e avisa de versao nova (so leitura, nada e enviado)
     "tamanho_fonte_min": 9,
-    "fonte": "Segoe UI",
+    "fonte_overlay": "auto",   # auto = mesma fonte do jogo (Lexend/Inter/Cormorant); ou um nome, ex. "Segoe UI"
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo
     "opacidade_fundo": "#141821",
     "cor_texto": "#f2e6c9",
@@ -88,6 +90,16 @@ def read_json(path, default):
         return default
     except Exception:
         return default
+
+
+def newer(path, than):
+    """True se `path` existe e foi gravado depois de `than`."""
+    if not FROZEN:
+        return False  # rodando pelo codigo-fonte: vale sempre o arquivo do projeto (o que se esta editando)
+    try:
+        return os.path.getmtime(path) > os.path.getmtime(than)
+    except OSError:
+        return False
 
 
 def write_json(path, data):

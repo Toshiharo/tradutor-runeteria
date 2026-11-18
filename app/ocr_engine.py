@@ -67,15 +67,18 @@ class WindowsOcr:
         result = self.loop.run_until_complete(self.engine.recognize_async(bmp))
         lines = []
         for line in result.lines:
-            xs, ys, xe, ye = [], [], [], []
+            xs, ys, xe, ye, words = [], [], [], [], []
             for word in line.words:
                 r = word.bounding_rect
                 xs.append(r.x); ys.append(r.y); xe.append(r.x + r.width); ye.append(r.y + r.height)
+                words.append({"text": word.text, "x": r.x / scale, "y": r.y / scale,
+                              "w": r.width / scale, "h": r.height / scale})
             if not xs:
                 continue
             lines.append({
                 "text": line.text,
                 "x": min(xs) / scale, "y": min(ys) / scale,
                 "w": (max(xe) - min(xs)) / scale, "h": (max(ye) - min(ys)) / scale,
+                "words": words,  # usado por pipeline.tidy_lines para separar colunas e tirar icones
             })
         return lines
