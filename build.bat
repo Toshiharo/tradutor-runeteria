@@ -3,7 +3,7 @@ chcp 65001 >nul
 title Gerando o Tradutor Runeteria
 cd /d "%~dp0"
 
-echo === 1/4 Procurando o Python ===
+echo === 1/5 Procurando o Python ===
 where py >nul 2>nul
 if errorlevel 1 (
   echo.
@@ -18,7 +18,7 @@ if not exist .venv (
 )
 call .venv\Scripts\activate.bat
 
-echo === 2/4 Instalando bibliotecas ===
+echo === 2/5 Instalando bibliotecas ===
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt pyinstaller
 if errorlevel 1 (
@@ -27,26 +27,50 @@ if errorlevel 1 (
   exit /b 1
 )
 
-echo === 3/4 Baixando o modelo de traducao offline (uma vez so, ~100 MB) ===
+echo === 3/5 Baixando o modelo de traducao offline (uma vez so, ~100 MB) ===
 python baixar_modelo.py
+if not exist app\fonts\Lexend.ttf python tools\baixar_fontes.py
+if not exist app\icone.ico python tools\gerar_icone.py
 
-echo === 4/4 Gerando o .exe ===
+echo === 4/5 Gerando o programa ===
 set ADDMODEL=
 if exist modelos\en_pt set ADDMODEL=--add-data "modelos;modelos"
 pyinstaller --noconfirm --clean --onedir --windowed --name TradutorRuneteria ^
-  --paths app --add-data "app\data;data" %ADDMODEL% ^
+  --icon app\icone.ico ^
+  --paths app --add-data "app\data;data" --add-data "app\fonts;fonts" --add-data "app\icone.ico;." %ADDMODEL% ^
   --collect-all winrt --collect-all ctranslate2 --collect-all sentencepiece ^
   --hidden-import rapidfuzz --collect-submodules rapidfuzz ^
   app\main.py
 if errorlevel 1 (
-  echo Falha ao gerar o .exe. Veja a mensagem acima.
+  echo Falha ao gerar o programa. Veja a mensagem acima.
   pause
   exit /b 1
 )
 copy /y LEIAME.txt dist\TradutorRuneteria\ >nul
 
+echo === 5/5 Gerando o instalador ===
+set ISCC=
+if exist "%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe" set ISCC=%LOCALAPPDATA%\Programs\Inno Setup 6\ISCC.exe
+if exist "%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe" set ISCC=%ProgramFiles(x86)%\Inno Setup 6\ISCC.exe
+if "%ISCC%"=="" goto sem_inno
+
+for /f %%v in ('python -c "import sys; sys.path.insert(0, 'app'); import config; print(config.APP_VERSION)"') do set APPVER=%%v
+"%ISCC%" /Q /DAppVersion=%APPVER% instalador.iss
+if errorlevel 1 (
+  echo Falha ao gerar o instalador. Veja a mensagem acima.
+  pause
+  exit /b 1
+)
 echo.
-echo PRONTO! O programa esta em: %~dp0dist\TradutorRuneteria\TradutorRuneteria.exe
-echo Voce pode criar um atalho dele na area de trabalho.
-explorer "%~dp0dist\TradutorRuneteria"
+echo PRONTO! Envie este arquivo para os jogadores:
+echo   %~dp0dist\TradutorRuneteria-Instalar.exe
+goto fim
+
+:sem_inno
+echo Inno Setup nao encontrado: o instalador nao foi gerado.
+echo Para gerar, instale com:  winget install JRSoftware.InnoSetup   e rode este arquivo de novo.
+echo O programa sem instalador esta em dist\TradutorRuneteria\TradutorRuneteria.exe
+
+:fim
+explorer "%~dp0dist"
 pause

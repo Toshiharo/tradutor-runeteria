@@ -8,8 +8,8 @@ import time
 
 from rapidfuzz import fuzz, process
 
-from config import (MEMORY_FILE, SEED_GLOSSARY, SEED_LIBRARY, USER_GLOSSARY,
-                    USER_OVERRIDES, read_json, write_json)
+from config import (MEMORY_FILE, ONLINE_GLOSSARY, ONLINE_LIBRARY, SEED_GLOSSARY, SEED_LIBRARY,
+                    USER_GLOSSARY, USER_OVERRIDES, read_json, write_json)
 
 NUM_RE = re.compile(r"\d+(?:[.,]\d+)*%?")
 SPACE_RE = re.compile(r"\s+")
@@ -45,7 +45,7 @@ def refill_numbers(src_ocr, pt):
 class Library:
     def __init__(self):
         self.lock = threading.RLock()
-        self.seed = read_json(SEED_LIBRARY, {})
+        self.seed = self._load_seed()
         self.memory = read_json(MEMORY_FILE, {})
         self.overrides = read_json(USER_OVERRIDES, None)
         if self.overrides is None:
@@ -57,8 +57,28 @@ class Library:
         self.rebuild()
 
     # ---------- carregamento ----------
+    @staticmethod
+    def _load_seed():
+        """Biblioteca revisada: a que veio com o programa + a copia mais nova baixada do repositorio."""
+        seed = read_json(SEED_LIBRARY, {})
+        online = read_json(ONLINE_LIBRARY, {})
+        if isinstance(online, dict):
+            seed.update({k: v for k, v in online.items() if isinstance(v, dict) and isinstance(v.get("pt"), str)})
+        return seed
+
+    def reload_seed(self):
+        """Chamado depois que online.sync_translations() baixou arquivos novos."""
+        with self.lock:
+            self.seed = self._load_seed()
+            self.glossary = self._load_glossary()
+            self.rebuild()
+
     def _load_glossary(self):
         seed = read_json(SEED_GLOSSARY, {})
+        online = read_json(ONLINE_GLOSSARY, {})
+        if isinstance(online, dict) and isinstance(online.get("manter_em_ingles"), list):
+            seed = {"manter_em_ingles": list(seed.get("manter_em_ingles", [])) + online["manter_em_ingles"],
+                    "termos_fixos": {**(seed.get("termos_fixos") or {}), **(online.get("termos_fixos") or {})}}
         g = seed.get("manter_em_ingles", [])
         user = read_json(USER_GLOSSARY, None)
         if user is None:

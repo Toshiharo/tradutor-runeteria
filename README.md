@@ -1,57 +1,45 @@
-TRADUTOR RUNETERIA (uso pessoal)
-================================
+# Tradutor Runeteria
 
-O que ele faz
-- Lê o texto da janela do Hytale e desenha a tradução em português por cima.
-- SÓ liga quando o log do jogo mostra que você está DENTRO do play.runeteria.com.
-  Em outro servidor ou no menu ele fica parado.
-- Funciona 100% offline: OCR do próprio Windows + tradutor offline (Argos).
-- Não mexe no jogo nem no cache: só lê a tela e os arquivos de log/cache.
+As telas do servidor **Runeteria** (Hytale) em português do Brasil. O programa lê o texto da tela do jogo e desenha a tradução por cima, com as mesmas cores e tamanho do texto original.
 
-Como a tradução é sempre igual
-1. biblioteca.json  -> mais de 2.700 textos das telas do Runeteria traduzidos e revisados à mão.
-2. minhas_traducoes.json -> suas correções. Vencem tudo.
-3. Texto que não está na biblioteca é traduzido offline UMA vez e salvo em
-   memoria_automatica.json. Da próxima vez sai igual (aparece em ITÁLICO na tela,
-   para você saber que foi tradução automática).
+## Instalar
 
-Aparência
-- A tradução usa as mesmas cores (fundo e letra), tamanho e alinhamento do texto original.
-- Para voltar às cores fixas, mude "usar_cores_da_tela" para false em config.json
-  (pasta de traduções) e abra o programa de novo. A fonte também pode ser trocada lá ("fonte").
-4. Atualizações: ao entrar no Runeteria o programa procura telas novas no cache do
-   Hytale, extrai os textos e já traduz antes de você abrir a tela.
-   A lista do que entrou fica em textos_novos.txt.
+1. Baixe o **TradutorRuneteria-Instalar.exe** na página de [versões](https://github.com/Toshiharo/tradutor-runeteria/releases/latest).
+2. Dê dois cliques nele e depois em **Instalar**. Não precisa de senha de administrador.
+3. O tradutor abre sozinho no final.
 
-GERAR O PROGRAMA (uma vez)
-1. Instale o Python 3.12: https://www.python.org/downloads/  (marque "Add python.exe to PATH")
-2. Extraia esta pasta e dê dois cliques em build.bat. Espere terminar (5-10 min).
-3. O programa fica em dist\TradutorRuneteria\TradutorRuneteria.exe
+O Windows pode mostrar o aviso "O Windows protegeu o computador", porque o programa não tem assinatura digital paga. Clique em **Mais informações** e depois em **Executar assim mesmo**.
 
-ANTES DE USAR (uma vez)
-O Windows precisa do leitor de texto (OCR) em inglês. Abra o PowerShell COMO
-ADMINISTRADOR e rode:
-   Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
+## Usar
 
-USAR
-- Abra o TradutorRuneteria.exe e depois o Hytale.
-- Deixe o Hytale em JANELA ou TELA CHEIA SEM BORDA (tela cheia exclusiva esconde o overlay).
-- Atalhos:  F8 liga/desliga   F9 mostra o texto original   F10 salva a tela em texto
+1. Abra o Tradutor Runeteria.
+2. Abra o Hytale e entre em `play.runeteria.com`.
+3. A tradução aparece por cima das telas do jogo.
 
-CORRIGIR UMA TRADUÇÃO
-1. Aperte F10 com a tela aberta.
-2. Clique em "Abrir pasta de traduções" e abra ultima_tela.txt.
-3. Copie a linha em inglês para minhas_traducoes.json assim:
-   {
-     "Choose a Torment tier and enter": "Escolha o nível de Tormento e entre"
-   }
-4. Clique em "Recarregar minhas traduções".
+Na primeira vez, clique em **Instalar** na linha "Leitor de tela" e aceite o pedido do Windows. Isso instala o leitor de texto em inglês do próprio Windows.
 
-NOMES QUE NÃO DEVEM SER TRADUZIDOS
-Adicione em glossario.json (na pasta de traduções), em "manter_em_ingles".
+Deixe o jogo em **Janela** ou **Tela cheia sem borda**; em tela cheia exclusiva a tradução não aparece.
 
-Pasta de traduções: %APPDATA%\RuneteriaTradutor
-Se algo der errado, mande o arquivo erros.log dessa pasta.
+| Atalho | O que faz |
+| --- | --- |
+| F8 | Liga ou desliga a tradução |
+| F9 | Mostra o texto original |
+| F10 | Salva os textos da tela em um arquivo, para corrigir uma tradução |
 
-Aviso: projeto de fã, sem ligação com a equipe do Runeteria ou do Hytale. Os textos
-originais do jogo pertencem aos seus donos.
+## Como funciona
+
+- Só funciona dentro do Runeteria. Em outro servidor ou no menu ele fica parado.
+- Não mexe no jogo: só lê a tela e os arquivos de registro do Hytale.
+- A tradução funciona sem internet. Com a opção "Buscar traduções novas na internet" ligada, ele baixa a lista de traduções mais nova deste repositório e avisa quando sai uma versão nova. Nada do seu computador é enviado.
+- As traduções vêm de uma biblioteca com mais de 2.700 textos revisados à mão ([`app/data/biblioteca.json`](app/data/biblioteca.json)). O que não está nela é traduzido automaticamente e aparece em *itálico*.
+- Termos de jogo ficam em inglês, como a gente fala: Hotbar, loot, boss, buff, HP, XP, tier, rank, pet.
+
+## Ajudar com as traduções
+
+Achou uma tradução errada? Abra uma [issue](https://github.com/Toshiharo/tradutor-runeteria/issues) com o texto em inglês e a tradução certa, ou envie um pull request alterando `app/data/biblioteca.json`. Quem tem o programa instalado recebe a correção na próxima vez que abrir.
+
+## Gerar o programa a partir do código
+
+Precisa do Windows 10 ou 11 e do Python 3.12. Rode `build.bat`: ele cria o ambiente, baixa o modelo de tradução offline e gera `dist\TradutorRuneteria\`. Com o [Inno Setup](https://jrsoftware.org/isinfo.php) instalado, gera também `dist\TradutorRuneteria-Instalar.exe`.
+
+Projeto de fã. Os textos originais do jogo pertencem aos seus donos.

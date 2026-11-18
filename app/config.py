@@ -4,6 +4,8 @@ import os
 import sys
 
 APP_NAME = "Tradutor Runeteria"
+APP_VERSION = "1.0.0"   # mude aqui e em instalador.iss ao publicar uma versao nova (tag v1.0.0 no GitHub)
+REPO = "Toshiharo/tradutor-runeteria"
 
 # Pasta onde ficam os arquivos que vem junto com o programa (biblioteca, modelo)
 if getattr(sys, "frozen", False):
@@ -12,6 +14,8 @@ else:
     BUNDLE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DATA_DIR = os.path.join(BUNDLE_DIR, "data")
+FONTS_DIR = os.path.join(BUNDLE_DIR, "fonts")
+ICON_FILE = os.path.join(BUNDLE_DIR, "icone.ico")
 MODEL_DIR = os.path.join(BUNDLE_DIR, "modelos", "en_pt")
 if not os.path.isdir(MODEL_DIR):  # rodando direto do codigo-fonte
     MODEL_DIR = os.path.join(os.path.dirname(BUNDLE_DIR), "modelos", "en_pt")
@@ -35,6 +39,10 @@ NEW_TEXTS_LOG = os.path.join(USER_DIR, "textos_novos.txt")
 SCREEN_DUMP = os.path.join(USER_DIR, "ultima_tela.txt")
 CONFIG_FILE = os.path.join(USER_DIR, "config.json")
 ERROR_LOG = os.path.join(USER_DIR, "erros.log")
+# copias mais novas da biblioteca/glossario baixadas do repositorio (ver online.py)
+ONLINE_DIR = os.path.join(USER_DIR, "online")
+ONLINE_LIBRARY = os.path.join(ONLINE_DIR, "biblioteca.json")
+ONLINE_GLOSSARY = os.path.join(ONLINE_DIR, "glossario.json")
 
 DEFAULTS = {
     "servidor": "runeteria.com",
@@ -42,6 +50,7 @@ DEFAULTS = {
     "escala_ocr": 1.6,
     "similaridade_minima": 86,
     "traduzir_desconhecidos": True,
+    "atualizar_pela_internet": True,   # baixa traducoes novas e avisa de versao nova (so leitura, nada e enviado)
     "tamanho_fonte_min": 9,
     "fonte": "Segoe UI",
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo

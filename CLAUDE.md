@@ -5,7 +5,8 @@ compartilhado com outros jogadores brasileiros. Todas as traduções são em por
 
 ## O que é
 App Windows que traduz para pt-BR as telas do servidor **Runeteria** (Hytale, `play.runeteria.com:5520`),
-desenhando a tradução por cima da janela do jogo. Só funciona dentro do Runeteria. 100% offline.
+desenhando a tradução por cima da janela do jogo. Só funciona dentro do Runeteria. A tradução é offline
+(a internet é usada só para baixar traduções/versões novas, ver "Internet").
 O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. **Nunca modificar o cache do jogo.**
 
 ## Status
@@ -53,6 +54,25 @@ por marcador e `_agree` acerta artigo/possessivo). Ao mudar um termo, mude na bi
 Profissões/bancadas traduzidas nos textos de maestria (Sawmill→Serraria, Tannery→Curtume, Loom→Tear, Smelter→Fundição).
 Labels com `RenderUppercase` aparecem em MAIÚSCULAS no OCR — a biblioteca compara sem diferenciar caixa.
 
+## Usuário final é leigo
+Quem usa não é técnico: instalar e usar tem que ser quase um clique. Nada de pedir PowerShell, editar JSON ou ler log
+para o fluxo normal. Cada problema aparece na janela em linguagem simples, com um botão que resolve
+(ex.: linha "Leitor de tela" → botão Instalar chama `winutil.install_english_ocr`, que abre o UAC).
+
+## Janela do app (Runeteria Design System)
+`theme.py` tem os tokens do "Runeteria Design System" (artifact do dono no claude.ai, UI KIT V2): rampa navy base-bg,
+dourado primary como único destaque, cantos de 4–6 px, filete dourado com losango, rótulos de botão/seção em MAIÚSCULAS.
+Fontes em `app/fonts` (OFL, carregadas só para o processo): Cormorant (título), Lexend (botões/rótulos), Inter (texto).
+Sem emoji, sem logotipo desenhado (o ícone é um "R" tipográfico, `tools/gerar_icone.py`). Não usar cores fora dos tokens.
+`main._build_window` monta a janela; `refresh_status` decide a frase de estado e as linhas de "Preparação".
+
+## Internet (opcional, desligável)
+`online.py` só lê do GitHub (`Toshiharo/tradutor-runeteria`): `app/data/biblioteca.json` e `glossario.json` do branch
+main (com ETag, validados, gravados em `%APPDATA%\RuneteriaTradutor\online`) e a tag da última release para avisar de
+versão nova. Nunca envia dados. Corrigir uma tradução = commit no main; os jogadores recebem ao abrir o app.
+Versão: `config.APP_VERSION` (o build passa para o instalador); publicar = release com tag `vX.Y.Z` e o instalador anexado.
+
 ## Build
 `build.bat`: cria `.venv`, instala `requirements.txt` + pyinstaller, roda `baixar_modelo.py` (Argos en_pt 1.9 → `modelos/en_pt`),
-gera `dist\TradutorRuneteria\` (onedir, windowed).
+gera `dist\TradutorRuneteria\` (onedir, windowed) e, com o Inno Setup 6 instalado, `dist\TradutorRuneteria-Instalar.exe`
+(`instalador.iss`: por usuário, sem administrador, atalhos, opção de abrir com o Windows).

@@ -59,6 +59,69 @@ def single_instance(name):
     return ctypes.get_last_error() != 183  # ERROR_ALREADY_EXISTS
 
 
+def dark_titlebar(hwnd):
+    """Barra de titulo escura (Windows 10 2004+ / 11), para combinar com a janela."""
+    try:
+        val = ctypes.c_int(1)
+        ctypes.windll.dwmapi.DwmSetWindowAttribute(wintypes.HWND(hwnd), 20, ctypes.byref(val), ctypes.sizeof(val))
+    except Exception:
+        pass
+
+
+# ---------- abrir junto com o Windows ----------
+RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
+RUN_NAME = "TradutorRuneteria"
+
+
+def autostart_command():
+    """Comando gravado no registro; None quando rodando pelo codigo-fonte (so faz sentido no .exe)."""
+    import sys
+    if not getattr(sys, "frozen", False):
+        return None
+    return f'"{sys.executable}" --minimizado'
+
+
+def autostart_enabled():
+    import winreg
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY) as k:
+            return winreg.QueryValueEx(k, RUN_NAME)[0] == autostart_command()
+    except OSError:
+        return False
+
+
+def set_autostart(on):
+    """Liga/desliga para o usuario atual (HKCU, nao precisa de administrador)."""
+    import winreg
+    cmd = autostart_command()
+    if cmd is None:
+        return False
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, RUN_KEY, 0, winreg.KEY_SET_VALUE) as k:
+        if on:
+            winreg.SetValueEx(k, RUN_NAME, 0, winreg.REG_SZ, cmd)
+        else:
+            try:
+                winreg.DeleteValue(k, RUN_NAME)
+            except OSError:
+                pass
+    return True
+
+
+def install_english_ocr():
+    """Instala o leitor de texto em ingles do Windows. Abre o pedido de administrador (UAC) e espera
+    terminar. Devolve True se o comando rodou ate o fim (o chamador confere se o OCR apareceu)."""
+    import subprocess
+    inner = "Add-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0'"
+    outer = ("try { $p = Start-Process powershell -Verb RunAs -WindowStyle Hidden -Wait -PassThru "
+             f"-ArgumentList '-NoProfile','-Command',\"{inner}\"; exit $p.ExitCode }} catch {{ exit 1223 }}")
+    try:
+        r = subprocess.run(["powershell", "-NoProfile", "-Command", outer], timeout=900,
+                           creationflags=0x08000000)  # CREATE_NO_WINDOW
+        return r.returncode == 0
+    except Exception:
+        return False
+
+
 def toplevel_hwnd(widget_id):
     """Janela de verdade (a que o Windows enxerga) a partir do winfo_id() de um widget tkinter."""
     return user32.GetAncestor(widget_id, GA_ROOT) or widget_id
