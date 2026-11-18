@@ -54,6 +54,7 @@ DEFAULTS = {
     "traduzir_desconhecidos": True,
     "atualizar_pela_internet": True,   # baixa traducoes novas e avisa de versao nova (so leitura, nada e enviado)
     "tamanho_fonte_min": 6,   # em pixels; o overlay nunca fica menor que isso nem que 60% do original
+    "permitir_gravar": True,   # a traducao aparece em gravacoes/transmissoes (OBS, Discord, Xbox Game Bar)
     "fonte_overlay": "auto",   # auto = mesma fonte do jogo (Lexend/Inter/Cormorant); ou um nome, ex. "Segoe UI"
     "usar_cores_da_tela": True,   # traducao com as cores do texto original; False = cores fixas abaixo
     "opacidade_fundo": "#141821",

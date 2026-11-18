@@ -442,6 +442,7 @@ class App:
         removed = False      # tirou traducao da tela e ainda nao releu (ai a pressa e maior)
         last_rect = None
         ocr_pass = 0
+        window_grab = None   # None = ainda nao testou; True = le so a janela do jogo; False = le a tela
         while True:
             time.sleep(TICK)
             try:
@@ -487,8 +488,28 @@ class App:
                         self.ui_q.put(("hide",))
                         self.hidden_for_capture.wait(0.4)
                         time.sleep(0.03)
-                shot = sct.grab({"left": x, "top": y, "width": w, "height": h})
-                img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+                img = None
+                if window_grab is not False:
+                    # le so a janela do jogo: o overlay fica de fora sem precisar ser escondido das
+                    # capturas, e o jogador consegue gravar video/transmitir com a traducao aparecendo
+                    try:
+                        img = self.w.grab_window(hwnd, w, h)
+                    except Exception:
+                        img = None
+                    if img is not None and window_grab is None:
+                        lo, hi = img.convert("L").reduce(16).getextrema()
+                        if hi - lo < 12:
+                            img = None  # veio preta/vazia: este PC nao suporta, fica com a captura da tela
+                        else:
+                            window_grab = True
+                            self.ui_q.put(("recordable", self.cfg.get("permitir_gravar", True)))
+                    if img is None and window_grab is None:
+                        window_grab = False
+                    elif img is None:
+                        continue  # falha momentanea: tenta de novo no proximo ciclo
+                if img is None:
+                    shot = sct.grab({"left": x, "top": y, "width": w, "height": h})
+                    img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
                 sig = img.reduce(20).convert("L")  # assinatura da tela inteira (~1 ms)
 
                 # 1) conferencia rapida: tira na hora o que ficou em cima de texto que ja nao existe
@@ -568,6 +589,11 @@ class App:
                 elif kind == "hide":
                     self.hide_overlay()
                     self.hidden_for_capture.set()
+                elif kind == "recordable":
+                    # o OCR le so a janela do jogo: o overlay pode aparecer em gravacoes e transmissoes
+                    self.capture_safe = True
+                    if msg[1]:
+                        winutil.exclude_from_capture(self.ov_hwnd, on=False)
                 elif kind == "toggle":
                     self.toggle()
                 elif kind == "peek":

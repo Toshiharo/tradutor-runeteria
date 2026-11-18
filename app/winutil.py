@@ -205,11 +205,59 @@ def make_overlay(hwnd):
     return exclude_from_capture(hwnd)
 
 
-def exclude_from_capture(hwnd):
+def exclude_from_capture(hwnd, on=True):
+    """on=True: o overlay nao aparece em capturas nem gravacoes. on=False: aparece (para gravar video)."""
     try:
-        return bool(user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
+        return bool(user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE if on else 0))
     except Exception:
         return False
+
+
+class _BMI(ctypes.Structure):
+    _fields_ = [("biSize", wintypes.DWORD), ("biWidth", wintypes.LONG), ("biHeight", wintypes.LONG),
+                ("biPlanes", wintypes.WORD), ("biBitCount", wintypes.WORD), ("biCompression", wintypes.DWORD),
+                ("biSizeImage", wintypes.DWORD), ("biXPelsPerMeter", wintypes.LONG),
+                ("biYPelsPerMeter", wintypes.LONG), ("biClrUsed", wintypes.DWORD), ("biClrImportant", wintypes.DWORD)]
+
+
+gdi32 = ctypes.WinDLL("gdi32", use_last_error=True)
+_sig(user32.GetDC, wintypes.HDC, wintypes.HWND)
+_sig(user32.ReleaseDC, ctypes.c_int, wintypes.HWND, wintypes.HDC)
+_sig(user32.PrintWindow, wintypes.BOOL, wintypes.HWND, wintypes.HDC, wintypes.UINT)
+_sig(gdi32.CreateCompatibleDC, wintypes.HDC, wintypes.HDC)
+_sig(gdi32.CreateCompatibleBitmap, wintypes.HBITMAP, wintypes.HDC, ctypes.c_int, ctypes.c_int)
+_sig(gdi32.SelectObject, wintypes.HGDIOBJ, wintypes.HDC, wintypes.HGDIOBJ)
+_sig(gdi32.DeleteObject, wintypes.BOOL, wintypes.HGDIOBJ)
+_sig(gdi32.DeleteDC, wintypes.BOOL, wintypes.HDC)
+_sig(gdi32.GetDIBits, ctypes.c_int, wintypes.HDC, wintypes.HBITMAP, wintypes.UINT, wintypes.UINT,
+     wintypes.LPVOID, ctypes.c_void_p, wintypes.UINT)
+
+
+def grab_window(hwnd, w, h):
+    """So o conteudo da janela do jogo (PrintWindow), sem nada do que estiver por cima dela - nem o
+    overlay. Assim o overlay pode aparecer em gravacoes (OBS, Discord) sem o OCR ler a propria traducao.
+    Devolve uma imagem PIL, ou None se o Windows nao conseguir (a imagem vem preta)."""
+    from PIL import Image
+    hdc = user32.GetDC(hwnd)
+    if not hdc:
+        return None
+    mdc = gdi32.CreateCompatibleDC(hdc)
+    bmp = gdi32.CreateCompatibleBitmap(hdc, w, h)
+    try:
+        old = gdi32.SelectObject(mdc, bmp)
+        ok = user32.PrintWindow(hwnd, mdc, 1 | 2)  # PW_CLIENTONLY | PW_RENDERFULLCONTENT
+        gdi32.SelectObject(mdc, old)
+        if not ok:
+            return None
+        bi = _BMI(ctypes.sizeof(_BMI), w, -h, 1, 32, 0, 0, 0, 0, 0, 0)
+        buf = ctypes.create_string_buffer(w * h * 4)
+        if gdi32.GetDIBits(mdc, bmp, 0, h, buf, ctypes.byref(bi), 0) != h:
+            return None
+        return Image.frombuffer("RGB", (w, h), buf, "raw", "BGRX", 0, 1)
+    finally:
+        gdi32.DeleteObject(bmp)
+        gdi32.DeleteDC(mdc)
+        user32.ReleaseDC(hwnd, hdc)
 
 
 VK = {f"F{i}": 0x6F + i for i in range(1, 13)}

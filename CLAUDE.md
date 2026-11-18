@@ -17,8 +17,10 @@ O cliente do Hytale não aceita mods: o app só lê a tela, os logs e o cache. *
 - Verificado de verdade: OCR, tradução offline, biblioteca/fuzzy, lock no log real, atualizador no cache real, captura da janela.
 - Overlay conferido em 2026-11-18 sobre uma captura real do jogo (tela Overview, 1920x1009): em 77 textos, mediana de
   altura x1,00, largura x1,00 e desvio vertical 0 px contra o original. O app também rodou ao vivo com o jogo em foco
-  sem erro. O overlay não aparece em capturas (`SetWindowDisplayAffinity`), então a conferência visual é feita
-  desenhando com `App.draw` sobre a captura; o clique atravessando o overlay só o usuário consegue confirmar.
+  sem erro. O OCR lê só a janela do jogo (`winutil.grab_window`, PrintWindow ~21 ms), então o overlay aparece em
+  gravações/transmissões (OBS, Discord) — `permitir_gravar`. Se o PrintWindow vier preto, volta para a captura da tela
+  com o overlay excluído (`SetWindowDisplayAffinity`). A conferência visual também é feita desenhando com `App.draw`
+  sobre a captura; o clique atravessando o overlay só o usuário consegue confirmar.
   O jogo precisa estar em janela / janela sem bordas (tela cheia exclusiva esconde o overlay).
 - A tradução automática (Argos) é fraca em rótulos curtos e puxa para pt-PT; o que importa deve ir para `biblioteca.json`.
 
