@@ -14,14 +14,14 @@ Como a tradução é sempre igual
 3. Texto que não está na biblioteca é traduzido offline UMA vez e salvo em
    memoria_automatica.json. Da próxima vez sai igual (aparece em ITÁLICO na tela,
    para você saber que foi tradução automática).
+4. Atualizações: ao entrar no Runeteria o programa procura telas novas no cache do
+   Hytale, extrai os textos e já traduz antes de você abrir a tela.
+   A lista do que entrou fica em textos_novos.txt.
 
 Aparência
 - A tradução usa as mesmas cores (fundo e letra), tamanho e alinhamento do texto original.
 - Para voltar às cores fixas, mude "usar_cores_da_tela" para false em config.json
   (pasta de traduções) e abra o programa de novo. A fonte também pode ser trocada lá ("fonte").
-4. Atualizações: ao entrar no Runeteria o programa procura telas novas no cache do
-   Hytale, extrai os textos e já traduz antes de você abrir a tela.
-   A lista do que entrou fica em textos_novos.txt.
 
 GERAR O PROGRAMA (uma vez)
 1. Instale o Python 3.12: https://www.python.org/downloads/  (marque "Add python.exe to PATH")
