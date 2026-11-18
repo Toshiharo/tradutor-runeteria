@@ -1,0 +1,57 @@
+TRADUTOR RUNETERIA (uso pessoal)
+================================
+
+O que ele faz
+- Lê o texto da janela do Hytale e desenha a tradução em português por cima.
+- SÓ liga quando o log do jogo mostra que você está DENTRO do play.runeteria.com.
+  Em outro servidor ou no menu ele fica parado.
+- Funciona 100% offline: OCR do próprio Windows + tradutor offline (Argos).
+- Não mexe no jogo nem no cache: só lê a tela e os arquivos de log/cache.
+
+Como a tradução é sempre igual
+1. biblioteca.json  -> mais de 2.700 textos das telas do Runeteria traduzidos e revisados à mão.
+2. minhas_traducoes.json -> suas correções. Vencem tudo.
+3. Texto que não está na biblioteca é traduzido offline UMA vez e salvo em
+   memoria_automatica.json. Da próxima vez sai igual (aparece em ITÁLICO na tela,
+   para você saber que foi tradução automática).
+
+Aparência
+- A tradução usa as mesmas cores (fundo e letra), tamanho e alinhamento do texto original.
+- Para voltar às cores fixas, mude "usar_cores_da_tela" para false em config.json
+  (pasta de traduções) e abra o programa de novo. A fonte também pode ser trocada lá ("fonte").
+4. Atualizações: ao entrar no Runeteria o programa procura telas novas no cache do
+   Hytale, extrai os textos e já traduz antes de você abrir a tela.
+   A lista do que entrou fica em textos_novos.txt.
+
+GERAR O PROGRAMA (uma vez)
+1. Instale o Python 3.12: https://www.python.org/downloads/  (marque "Add python.exe to PATH")
+2. Extraia esta pasta e dê dois cliques em build.bat. Espere terminar (5-10 min).
+3. O programa fica em dist\TradutorRuneteria\TradutorRuneteria.exe
+
+ANTES DE USAR (uma vez)
+O Windows precisa do leitor de texto (OCR) em inglês. Abra o PowerShell COMO
+ADMINISTRADOR e rode:
+   Add-WindowsCapability -Online -Name "Language.OCR~~~en-US~0.0.1.0"
+
+USAR
+- Abra o TradutorRuneteria.exe e depois o Hytale.
+- Deixe o Hytale em JANELA ou TELA CHEIA SEM BORDA (tela cheia exclusiva esconde o overlay).
+- Atalhos:  F8 liga/desliga   F9 mostra o texto original   F10 salva a tela em texto
+
+CORRIGIR UMA TRADUÇÃO
+1. Aperte F10 com a tela aberta.
+2. Clique em "Abrir pasta de traduções" e abra ultima_tela.txt.
+3. Copie a linha em inglês para minhas_traducoes.json assim:
+   {
+     "Choose a Torment tier and enter": "Escolha o nível de Tormento e entre"
+   }
+4. Clique em "Recarregar minhas traduções".
+
+NOMES QUE NÃO DEVEM SER TRADUZIDOS
+Adicione em glossario.json (na pasta de traduções), em "manter_em_ingles".
+
+Pasta de traduções: %APPDATA%\RuneteriaTradutor
+Se algo der errado, mande o arquivo erros.log dessa pasta.
+
+Aviso: projeto de fã, sem ligação com a equipe do Runeteria ou do Hytale. Os textos
+originais do jogo pertencem aos seus donos.
