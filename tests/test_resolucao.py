@@ -94,5 +94,27 @@ class FonteEstavel(unittest.TestCase):
         self.assertEqual(set(got), {"#9aa6c3"})
 
 
+class PosicaoEstavel(unittest.TestCase):
+    """Tela parada: a traducao nao pode pular de lado entre leituras."""
+
+    def _app(self):
+        import types
+        import main
+        return types.SimpleNamespace(_geo_memo=[], GEO_KEYS=main.App.GEO_KEYS), main
+
+    def test_alinhamento_que_alterna_fica_parado(self):
+        app, main = self._app()
+        seq = [{"en": "TALENTS", "pt": "TALENTOS", "x": 750, "y": 287, "w": 53, "h": 9, "align": a} for a in "lrlrlr"]
+        got = [main.App.stable_geometry(app, [b])[0]["align"] for b in seq]
+        self.assertEqual(len(set(got)), 1)
+
+    def test_caixa_com_icone_perde_para_a_sem_icone(self):
+        app, main = self._app()
+        wide = {"en": "O Agility (Scaling)", "pt": "Agilidade (Scaling)", "x": 226, "y": 880, "w": 117, "h": 12, "align": "left"}
+        narrow = {"en": "Agility (Scaling)", "pt": "Agilidade (Scaling)", "x": 249, "y": 880, "w": 94, "h": 12, "align": "left"}
+        got = [main.App.stable_geometry(app, [dict(b)])[0]["x"] for b in (wide, narrow, wide, narrow, wide, narrow)]
+        self.assertEqual(got[1:], [249] * 5)  # depois da 2a leitura, fica sempre a sem icone
+
+
 if __name__ == "__main__":
     unittest.main()

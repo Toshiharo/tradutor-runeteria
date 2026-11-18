@@ -33,6 +33,12 @@ def _overlap(a, b):
     return ix * iy > 0.3 * min(a["w"] * a["h"], b["w"] * b["h"])
 
 
+def _inside(a, b):
+    """A caixa a cabe dentro da b (com folga de 2 px)?"""
+    return (a["x"] >= b["x"] - 2 and a["x"] + a["w"] <= b["x"] + b["w"] + 2
+            and a.get("align") == b.get("align") and a["w"] < b["w"])
+
+
 def log_error():
     with open(ERROR_LOG, "a", encoding="utf-8") as f:
         f.write(time.strftime("\n[%Y-%m-%d %H:%M:%S]\n") + traceback.format_exc())
@@ -51,6 +57,7 @@ class App:
         self.last_boxes = []
         self.drawn_sig = None
         self._faces_memo, self._faces_pruned = {}, 0.0  # fonte escolhida por texto (ver stable_face)
+        self._geo_memo = []  # posicao/alinhamento escolhidos por texto (ver stable_geometry)
         self._scale, self._scale_for = 1.6, None  # escala do OCR (ver ocr_scale)
         self.mt = None
         self.ocr = None
@@ -514,6 +521,7 @@ class App:
                     self.last_lines = lines
                     boxes = self.translator.boxes(lines)
                     ocr_sig = sig
+                boxes = self.stable_geometry(boxes)
                 last_ocr, urgent_since, removed = now, None, False
                 fresh = [(b, region_thumb(img, b["x"], b["y"], b["w"], b["h"])) for b in boxes]
                 # traducao da leitura anterior que esta leitura nao achou, mas cuja regiao nao mudou:
@@ -608,6 +616,54 @@ class App:
         wn = self.font(px, False, False).measure(text)
         return abs(wb - width) <= abs(wn - width)
 
+    GEO_KEYS = ("x", "y", "w", "h", "line_h", "align", "iy", "ih", "room_l", "room_r", "ref")
+
+    def stable_geometry(self, boxes):
+        """Mesmo lugar e mesmo alinhamento para o mesmo texto, leitura apos leitura.
+
+        As leituras alternam duas escalas do OCR e cada uma recorta o texto um pouco diferente: numa o
+        icone ao lado entra na caixa ("Agilidade" comecava 23 px antes) e na outra nao, e o alinhamento
+        virava esquerda/direita ("TALENTOS") ou centro/direita ("NV. 20", "LOJA"). Como a traducao tem
+        outra largura, isso fazia o texto pular de lado. Aqui cada texto guarda as posicoes ja vistas e usa
+        a primeira; outra so ganha com 2 votos de folga, ou se for bem menor e dentro dela (sem o icone).
+        """
+        now = time.monotonic()
+        memo = [r for r in self._geo_memo if now - r["seen"] < 30]
+        out = []
+        for b in boxes:
+            rec = None
+            for r in memo:
+                g = r["best"]
+                # mesmo texto lido, ou mesma traducao (o OCR as vezes pega o icone junto: "O Agility")
+                if (r["en"] == b["en"] or r.get("pt") == b["pt"]) and _overlap(g, b):
+                    rec = r
+                    break
+            if rec is None:
+                rec = {"en": b["en"], "pt": b["pt"], "votes": {}, "snap": {}, "order": []}
+                memo.append(rec)
+            vk = (round(b["x"] / 3), round(b["y"] / 3), round(b["w"] / 3), b.get("align"))
+            if vk not in rec["votes"]:
+                rec["votes"][vk] = 0
+                rec["snap"][vk] = {k: b[k] for k in self.GEO_KEYS if k in b}
+                rec["order"].append(vk)
+            rec["votes"][vk] += 1
+            rec["seen"] = now
+            cur = rec.get("best_key")
+            if cur is None:
+                cur = vk  # primeira leitura define o lugar
+            elif vk != cur:
+                new, old_ = rec["snap"][vk], rec["snap"][cur]
+                if _inside(new, old_) and new["w"] < old_["w"] * 0.92:
+                    cur = vk  # caixa bem menor dentro da atual: e a sem o icone (depois disso nao volta)
+                elif rec["votes"][vk] >= rec["votes"][cur] + 2:
+                    cur = vk  # outra posicao so ganha com folga: oscilacao de 1 px nunca muda nada
+            rec["best_key"], rec["best"] = cur, rec["snap"][cur]
+            nb = dict(b)
+            nb.update(rec["best"])
+            out.append(nb)
+        self._geo_memo = memo[-3000:]
+        return out
+
     def _memo(self, b):
         now = time.monotonic()
         memo = self._faces_memo
@@ -670,6 +726,15 @@ class App:
 
     def draw(self, rect, boxes):
         self.last_boxes = boxes
+        if os.environ.get("RT_LOG_BOXES"):  # diagnostico: registra o que e desenhado (nao usado pelo usuario)
+            try:
+                import json
+                with open(os.environ["RT_LOG_BOXES"], "a", encoding="utf-8") as f:
+                    f.write(json.dumps({"t": time.time(), "boxes": [
+                        {k: b.get(k) for k in ("pt", "en", "x", "y", "w", "h", "align")} for b in boxes]},
+                        ensure_ascii=False) + "\n")
+            except Exception:
+                pass
         if not self.visible or not self.enabled:
             return
         sig = (rect, [(b["x"], b["y"], b["w"], b["h"], b["pt"], b.get("bg"), b.get("fg")) for b in boxes])
